@@ -49,7 +49,19 @@ export const useSaveStore = defineStore('save', () => {
   const mapDir = ref(1)   // resting sprite frame: 1=down, 4=left, 7=right, 10=up
 
   // Passed from game → battle via Pinia (replaces the classic POST form)
-  const encounter = reactive({ number: 0, level: 0, shiny: false })
+  const encounter = reactive({
+    number: 0, level: 0, shiny: false,
+    // Trainer battle fields
+    isTrainer: false,
+    trainerId: '',
+    trainerName: '',
+    trainerSlider: '',
+    trainerPortrait: '',
+    trainerStill: '',
+    trainerTeam: [] as { id: number; lvl: number }[],
+  })
+
+  const trainerWins = ref<Record<string, number>>({})
 
   function initDefaultSave() {
     playerData.nome = 'Player'
@@ -86,6 +98,7 @@ export const useSaveStore = defineStore('save', () => {
       xpMultiplier.value = (data as any).xpMultiplier ?? 3
       mapPos.value = (data as any).mapPos ?? 468
       mapDir.value = (data as any).mapDir ?? 1
+      trainerWins.value = (data as any).trainerWins ?? {}
       return true
     } catch {
       initDefaultSave()
@@ -105,6 +118,7 @@ export const useSaveStore = defineStore('save', () => {
       xpMultiplier: xpMultiplier.value,
       mapPos: mapPos.value,
       mapDir: mapDir.value,
+      trainerWins: { ...trainerWins.value },
     }
     localStorage.setItem(SAVE_KEY, encodeSave(data))
   }
@@ -180,6 +194,7 @@ export const useSaveStore = defineStore('save', () => {
     mapPos,
     mapDir,
     encounter,
+    trainerWins,
     load,
     save,
     initNewGame,

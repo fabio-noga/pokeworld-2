@@ -28,6 +28,35 @@
     <img src="/textures/Map/Mapa2.png" style="height:1920px;width:1155px;image-rendering:pixelated" alt="" />
   </div>
 
+  <!-- NPCs — share the same transform as the map so they scroll with it smoothly -->
+  <div class="npc-layer" :style="mapStyle">
+    <div
+      v-for="npc in npcs" :key="npc.id"
+      class="npc"
+      :style="npcTileStyle(npc.tile)"
+      @click="activeBubble = activeBubble?.id === npc.id ? null : npc"
+    >
+      <img :src="npc.overworld" alt="" />
+
+      <!-- Bubble anchored above this NPC's head -->
+      <Transition name="bubble">
+        <div class="npc-bubble" v-if="activeBubble?.id === npc.id" @click.stop>
+          <button class="bubble-close" @click.stop="activeBubble = null">✕</button>
+          <div class="bubble-name">{{ npc.name }}</div>
+          <div v-if="npc.isTrainer && (saveStore.trainerWins[npc.id] ?? 0) > 0" class="bubble-win-count">
+            You only defeated me {{ saveStore.trainerWins[npc.id] }} time{{ saveStore.trainerWins[npc.id] > 1 ? 's' : '' }}!
+          </div>
+          <div class="bubble-text">{{ npc.dialogue }}</div>
+          <button
+            v-if="npc.isTrainer"
+            class="bubble-fight-btn"
+            @click.stop="startTrainerBattle(npc)"
+          >⚔ FIGHT</button>
+        </div>
+      </Transition>
+    </div>
+  </div>
+
   <!-- Wild encounter HUD (TrackerBush) -->
   <div id="TrackerBush" :style="{ visibility: tracker.visible ? 'visible' : 'hidden' }">
     <h3 id="trackername"><b>{{ tracker.shiny ? '✨ ' : '' }}{{ tracker.name }}</b></h3>
@@ -105,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppHeader from '../components/AppHeader.vue'
 import { useAuthStore } from '../stores/auth'
@@ -123,14 +152,106 @@ const saveStore = useSaveStore()
 const MAP_WIDTH = 24
 const MAP_HEIGHT = 40
 const TILE_SIZE = 48
+const STEP_MS  = 260   // first step (deliberate)
+const CHAIN_MS = 130   // held key (continuous walk)
+
+// ── NPC definitions ──────────────────────────────────────────────
+interface NpcDef {
+  id: string
+  tile: number
+  overworld: string
+  portrait: string   // trainer.gif — used in battle intro
+  still: string      // trainer.png — used in battle outro
+  name: string
+  dialogue: string
+  isTrainer: boolean
+  slider?: string
+  team?: { id: number; minLvl: number; maxLvl: number }[]
+}
+
+// Bias toward Q3: max(r1, r2) distribution median ≈ 0.71 of range
+function biasedLevel(min: number, max: number): number {
+  const r = Math.max(Math.random(), Math.random())
+  return Math.round(min + r * (max - min))
+}
+
+const npcs: NpcDef[] = [
+  {
+    id: 'gym1',
+    tile: 200,
+    overworld: '/textures/Gym/1/overworld.png',
+    portrait:  '/textures/Gym/1/trainer.gif',
+    still:     '/textures/Gym/1/trainer.png',
+    name: 'Gym Leader Roark',
+    dialogue: 'I use Rock-type Pokémon! My Pokémon and I will crush you!',
+    isTrainer: true,
+    slider: '/textures/Gym/1/slider.png',
+    team: [
+      { id: 74, minLvl: 10, maxLvl: 16 },  // Geodude
+      { id: 95, minLvl: 10, maxLvl: 16 },  // Onix
+      { id: 76, minLvl: 12, maxLvl: 18 },  // Golem
+    ],
+  },
+]
 
 // ── State ────────────────────────────────────────────────────────
 const tileArray: number[] = []
 
 const mapOffset = reactive({ x: 0, y: 0 })
 const moving = ref(false)
+const stepMs = ref(STEP_MS)   // current step duration (switches to CHAIN_MS when chaining)
+let pendingKey: number | null = null
 let playerPosition = saveStore.mapPos ?? 468
+const playerTileRef = ref(playerPosition)   // reactive mirror for NPC adjacency
 let facingFrame = saveStore.mapDir ?? 1  // resting sprite frame: 1=down 4=left 7=right 10=up
+
+// ── NPC state ────────────────────────────────────────────────────
+const activeBubble = ref<NpcDef | null>(null)
+
+const adjacentNpcId = computed(() => {
+  const pr = Math.floor((playerTileRef.value - 1) / MAP_WIDTH)
+  const pc = (playerTileRef.value - 1) % MAP_WIDTH
+  for (const npc of npcs) {
+    const nr = Math.floor((npc.tile - 1) / MAP_WIDTH)
+    const nc = (npc.tile - 1) % MAP_WIDTH
+    if (Math.abs(pr - nr) + Math.abs(pc - nc) <= 1) return npc.id
+  }
+  return null
+})
+
+function npcTileStyle(tile: number) {
+  const nr = Math.floor((tile - 1) / MAP_WIDTH)
+  const nc = (tile - 1) % MAP_WIDTH
+  return {
+    left: (nc * TILE_SIZE) + 'px',
+    top:  (nr * TILE_SIZE) + 'px',
+  }
+}
+
+watch(adjacentNpcId, (id) => {
+  activeBubble.value = id ? (npcs.find(n => n.id === id) ?? null) : null
+})
+
+function startTrainerBattle(npc: NpcDef) {
+  if (!npc.team) return
+  activeBubble.value = null
+  saveStore.encounter.isTrainer = true
+  saveStore.encounter.trainerId = npc.id
+  saveStore.encounter.trainerName = npc.name
+  saveStore.encounter.trainerSlider = npc.slider ?? ''
+  saveStore.encounter.trainerPortrait = npc.portrait
+  saveStore.encounter.trainerStill = npc.still
+  // Generate levels with Q3 bias at battle start
+  const teamWithLevels = npc.team.map(p => ({
+    id: p.id,
+    lvl: biasedLevel(p.minLvl, p.maxLvl),
+  }))
+  saveStore.encounter.trainerTeam = teamWithLevels
+  saveStore.encounter.number = teamWithLevels[0].id
+  saveStore.encounter.level  = teamWithLevels[0].lvl
+  saveStore.encounter.shiny  = false
+  router.push('/battle')
+}
 
 const playerSprite = ref('')
 const petSprite = ref('')
@@ -153,7 +274,7 @@ const pokeNavOn = ref(false)
 // ── CSS position for map (replaces jQuery .animate) ──────────────
 const mapStyle = computed(() => ({
   transform: `translate(${mapOffset.x}px, ${mapOffset.y}px)`,
-  transition: moving.value ? 'transform 0.4s' : 'none',
+  transition: moving.value ? `transform ${stepMs.value}ms linear` : 'none',
 }))
 
 // Player stays fixed center — exact port of classic's .player CSS positioning
@@ -280,32 +401,48 @@ function setPlayerSprite(frame: number) {
   playerSprite.value = `/sprites/trainers/${tex.value}/${frame}.png`
 }
 
-// ── Movement (exact port of move.js KeyDown) ─────────────────────
+// ── Movement ──────────────────────────────────────────────────────
+function finishStep() {
+  moving.value = false
+  savePosition()
+  if (pendingKey !== null) {
+    const k = pendingKey
+    pendingKey = null
+    stepMs.value = CHAIN_MS   // chained step is faster
+    onKey(k)
+  } else {
+    stepMs.value = STEP_MS    // reset to deliberate speed
+  }
+}
+
 function onKey(keyCode: number) {
-  if (moving.value) return  // queue guard (replaces jQuery queue check)
+  if (moving.value) {
+    pendingKey = keyCode   // remember one queued step
+    return
+  }
 
   if (keyCode === 38) {
     // UP
     if (stepToggle === 0) { setPlayerSprite(11); stepToggle++ }
     else { setPlayerSprite(12); stepToggle = 0 }
     facingFrame = 10
-    setTimeout(() => setPlayerSprite(10), 250)
+    setTimeout(() => setPlayerSprite(10), stepMs.value * 0.55)
 
     if (tileArray[playerPosition - MAP_WIDTH] !== 4 && tileArray[playerPosition - MAP_WIDTH] !== 6) {
       moving.value = true
       playerPosition -= MAP_WIDTH
       mapOffset.y += TILE_SIZE
       checkBattle()
-      petTransition.value = 'top 0.4s, left 0.4s'
+      petTransition.value = `top ${stepMs.value}ms linear, left ${stepMs.value}ms linear`
       petPos.top += TILE_SIZE
       petPosition1 = 7
       setTimeout(() => {
-        petTransition.value = 'top 0.22s, left 0.22s'
+        petTransition.value = `top ${Math.round(stepMs.value * 0.55)}ms linear, left ${Math.round(stepMs.value * 0.55)}ms linear`
         petPos.top = middle.top + 50
         petPos.left = middle.left
         pet1ZIndex.value = 2
-      }, 220)
-      setTimeout(() => { moving.value = false; savePosition() }, 400)
+      }, Math.round(stepMs.value * 0.55))
+      setTimeout(finishStep, stepMs.value)
     }
 
   } else if (keyCode === 40) {
@@ -313,86 +450,85 @@ function onKey(keyCode: number) {
     if (stepToggle === 0) { setPlayerSprite(2); stepToggle++ }
     else { setPlayerSprite(3); stepToggle = 0 }
     facingFrame = 1
-    setTimeout(() => setPlayerSprite(1), 250)
+    setTimeout(() => setPlayerSprite(1), stepMs.value * 0.55)
 
     if (tileArray[playerPosition + MAP_WIDTH] !== 4 && tileArray[playerPosition + MAP_WIDTH] !== 6) {
       moving.value = true
       playerPosition += MAP_WIDTH
       mapOffset.y -= TILE_SIZE
       checkBattle()
-      petTransition.value = 'top 0.4s, left 0.4s'
+      petTransition.value = `top ${stepMs.value}ms linear, left ${stepMs.value}ms linear`
       petPos.top -= TILE_SIZE
       setTimeout(() => {
         petPosition1 = 1
         updatePetSprite()
-        petTransition.value = 'top 0.22s, left 0.22s'
+        petTransition.value = `top ${Math.round(stepMs.value * 0.55)}ms linear, left ${Math.round(stepMs.value * 0.55)}ms linear`
         petPos.top = middle.top
         petPos.left = middle.left
         pet1ZIndex.value = 0
-      }, 220)
-      setTimeout(() => { moving.value = false; savePosition() }, 400)
+      }, Math.round(stepMs.value * 0.55))
+      setTimeout(finishStep, stepMs.value)
     } else if (tileArray[playerPosition + MAP_WIDTH] === 6) {
       moving.value = true
       playerPosition += MAP_WIDTH * 2
       mapOffset.y -= TILE_SIZE * 2
-      petTransition.value = 'top 0.4s, left 0.4s'
+      petTransition.value = `top ${stepMs.value}ms linear, left ${stepMs.value}ms linear`
       petPos.top -= TILE_SIZE * 2
       setTimeout(() => {
         petPosition1 = 1
         updatePetSprite()
-        petTransition.value = 'top 0.22s, left 0.22s'
+        petTransition.value = `top ${Math.round(stepMs.value * 0.55)}ms linear, left ${Math.round(stepMs.value * 0.55)}ms linear`
         petPos.top = middle.top
         petPos.left = middle.left
         pet1ZIndex.value = 0
-      }, 220)
-      setTimeout(() => { moving.value = false; savePosition() }, 400)
+      }, Math.round(stepMs.value * 0.55))
+      setTimeout(finishStep, stepMs.value)
     }
 
   } else if (keyCode === 37) {
     // LEFT
     setPlayerSprite(5)
     facingFrame = 4
-    setTimeout(() => setPlayerSprite(4), 250)
+    setTimeout(() => setPlayerSprite(4), stepMs.value * 0.55)
 
     if (tileArray[playerPosition - 1] !== 4 && tileArray[playerPosition - 1] !== 6) {
       moving.value = true
       playerPosition -= 1
       mapOffset.x += TILE_SIZE
       checkBattle()
-      petTransition.value = 'top 0.4s, left 0.4s'
+      petTransition.value = `top ${stepMs.value}ms linear, left ${stepMs.value}ms linear`
       petPos.left += TILE_SIZE
       setTimeout(() => {
         petPosition1 = 3
         updatePetSprite()
-        petTransition.value = 'top 0.22s, left 0.22s'
+        petTransition.value = `top ${Math.round(stepMs.value * 0.55)}ms linear, left ${Math.round(stepMs.value * 0.55)}ms linear`
         petPos.left = middle.left + 38
         petPos.top = middle.top + 30
-      }, 220)
-      setTimeout(() => { moving.value = false; savePosition() }, 400)
+      }, Math.round(stepMs.value * 0.55))
+      setTimeout(finishStep, stepMs.value)
     }
 
   } else if (keyCode === 39) {
     // RIGHT
     setPlayerSprite(9)
     facingFrame = 7
-    setTimeout(() => setPlayerSprite(7), 250)
+    setTimeout(() => setPlayerSprite(7), stepMs.value * 0.55)
 
     if (tileArray[playerPosition + 1] !== 4 && tileArray[playerPosition + 1] !== 6) {
       moving.value = true
       playerPosition += 1
       mapOffset.x -= TILE_SIZE
       checkBattle()
-      // Pet steps right with map
-      petTransition.value = 'top 0.4s, left 0.4s'
+      petTransition.value = `top ${stepMs.value}ms linear, left ${stepMs.value}ms linear`
       petPos.left -= TILE_SIZE
       setTimeout(() => {
         petPosition1 = 5
         updatePetSprite()
-        petTransition.value = 'top 0.22s, left 0.22s'
+        petTransition.value = `top ${Math.round(stepMs.value * 0.55)}ms linear, left ${Math.round(stepMs.value * 0.55)}ms linear`
         petPos.left = middle.left - 38
         petPos.top = middle.top + 30
-      }, 220)
-      setTimeout(() => { moving.value = false; savePosition() }, 400)
+      }, Math.round(stepMs.value * 0.55))
+      setTimeout(finishStep, stepMs.value)
     }
   }
 }
@@ -400,6 +536,7 @@ function onKey(keyCode: number) {
 function savePosition() {
   saveStore.mapPos = playerPosition
   saveStore.mapDir = facingFrame
+  playerTileRef.value = playerPosition
   saveStore.save()
 }
 
@@ -782,6 +919,126 @@ onUnmounted(() => {
   background-size: cover;
 }
 
+
+/* ── NPC layer — same transform as .loveit/.map2, sits above overlay ── */
+.npc-layer {
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 3;
+  will-change: transform;
+  pointer-events: none;
+}
+.npc {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  cursor: pointer;
+  pointer-events: all;
+  transition: filter 0.15s;
+}
+.npc > img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  display: block;
+}
+
+
+/* ── NPC Speech Bubble — floats above the NPC sprite ── */
+.npc-bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: 200px;
+  background: #fff;
+  border: 3px solid #181830;
+  border-radius: 6px;
+  box-shadow: 3px 3px 0 #181830;
+  padding: 10px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: all;
+}
+/* Tail pointing down toward the NPC */
+.npc-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 8px solid transparent;
+  border-top-color: #181830;
+}
+.npc-bubble::before {
+  content: '';
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+  border-top-color: #fff;
+  z-index: 1;
+}
+.bubble-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #c82020;
+  letter-spacing: 0.4px;
+  padding-bottom: 5px;
+  border-bottom: 2px solid #e0e8f0;
+}
+.bubble-text {
+  font-size: 11px;
+  color: #181830;
+  line-height: 1.55;
+}
+.bubble-fight-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  padding: 7px 10px;
+  background: #c82020;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  box-shadow: 0 3px 0 #7a1010;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: opacity 0.15s, transform 0.1s;
+  letter-spacing: 0.4px;
+  margin-top: 2px;
+}
+.bubble-fight-btn:hover { opacity: 0.85; }
+.bubble-fight-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #7a1010; }
+.bubble-win-count {
+  font-size: 10px;
+  color: #c82020;
+  font-style: italic;
+  font-weight: 600;
+}
+.bubble-close {
+  position: absolute;
+  top: 4px; right: 6px;
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 3px;
+  transition: color 0.15s;
+}
+.bubble-close:hover { color: #181830; }
+
+.bubble-enter-active { animation: bubble-in 0.18s ease-out; }
+.bubble-leave-active { animation: bubble-in 0.12s ease-in reverse; }
+@keyframes bubble-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
 
 /* Mobile */
 @media screen and (max-width: 980px) {

@@ -25,9 +25,17 @@
         <div class="hud-hp">{{ playerHP }}/{{ playerMaxHP }}</div>
       </div>
 
-      <!-- Rival sprite -->
+      <!-- Enemy area: trainer intro/outro OR wild/battle Pokémon -->
       <div id="rival" v-show="!catching">
-        <img id="RivalImg" :src="rivalSprite" alt="" />
+        <img v-if="trainerVisible"
+             :src="trainerSrc"
+             class="rival-trainer-img"
+             :class="trainerAnimClass" />
+        <img v-if="pokemonVisible"
+             id="RivalImg"
+             :src="rivalSprite"
+             alt=""
+             :class="pokemonAnimClass" />
       </div>
 
       <!-- Catch ball — separate div so #rival > img width doesn't apply -->
@@ -47,9 +55,15 @@
       </div>
     </div>
 
-    <!-- Pokéball (catch button) -->
-    <div class="pokeball" @click="onCatch" :class="{ 'act-disabled': !canAct || battleOver || captureSuccess || forcedSwitch }">
-      <img src="/textures/HUD/Pokeball.png" alt="" />
+    <!-- Pokéball (catch button) or Trainer slider -->
+    <div class="pokeball"
+         @click="encounter.isTrainer ? undefined : onCatch()"
+         :class="{
+           'act-disabled': !encounter.isTrainer && (!canAct || battleOver || captureSuccess || forcedSwitch),
+           'trainer-slot': encounter.isTrainer,
+         }">
+      <img :src="encounter.isTrainer ? encounter.trainerSlider : '/textures/HUD/Pokeball.png'" alt=""
+           :style="encounter.isTrainer ? { width: '150px', margin: '25px', objectFit: 'contain' } : {}" />
     </div>
 
     <!-- Move buttons -->
@@ -90,7 +104,7 @@
 
   <AppHeader
     :label="allFainted ? 'Health Center' : 'BACK TO MAP'"
-    @nav-click="allFainted ? goToHealthCenter() : (forcedSwitch ? null : router.push('/game'))"
+    @nav-click="allFainted ? goToHealthCenter() : (forcedSwitch ? null : goBack())"
     :style="forcedSwitch && !allFainted ? { opacity: '0.4', pointerEvents: 'none' } : {}" />
 </template>
 
@@ -170,6 +184,15 @@ const catching = ref(false)
 const wiggling = ref(false)
 const captureSuccess = ref(false)
 const shakeKey = ref(0)
+const trainerTeamIndex = ref(0)
+const trainerVisible   = ref(false)
+const trainerIsOutro   = ref(false)
+const pokemonVisible   = ref(false)
+const trainerAnimClass = ref('')
+const pokemonAnimClass = ref('')
+const trainerSrc = computed(() =>
+  trainerIsOutro.value ? encounter.trainerStill : encounter.trainerPortrait
+)
 
 // ── Sprites ───────────────────────────────────────────────────────
 const rivalNum = computed(() => encounter.number > 0 ? encounter.number : 25)
@@ -494,10 +517,49 @@ async function onMove(i: number) {
 
   if (enemyHP.value <= 0) {
     if (active.value) active.value.hp = playerHP.value
-    log(`Wild ${enemyName.value} fainted!`)
-    const totalXp = Math.floor(encounter.level * 5 + Math.random() * 20)
-    awardXp(totalXp)
-    battleOver.value = true
+    const xpBase = Math.floor(encounter.level * 5 + Math.random() * 20)
+    awardXp(xpBase)
+
+    // HP bar drains (300ms transition), then faint animation
+    await delay(350)
+    pokemonAnimClass.value = 'anim-pokemon-faint'
+    await delay(580)
+    pokemonVisible.value = false
+    pokemonAnimClass.value = ''
+
+    if (encounter.isTrainer) {
+      const prefix = encounter.trainerName
+      log(`${prefix}'s ${enemyName.value} fainted!`)
+      const nextIdx = trainerTeamIndex.value + 1
+      if (nextIdx < encounter.trainerTeam.length) {
+        trainerTeamIndex.value = nextIdx
+        const next = encounter.trainerTeam[nextIdx]
+        encounter.number = next.id
+        encounter.level  = next.lvl
+        enemyHP.value = enemyMaxHP.value
+        pickEnemyMoves()
+        log(`${prefix} sent out ${enemyName.value}!`)
+        await delay(200)
+        pokemonVisible.value = true
+        pokemonAnimClass.value = 'anim-pokemon-enter'
+        await delay(500)
+        pokemonAnimClass.value = ''
+        await delay(200)
+        enemyTurn()
+      } else {
+        log(`${prefix} is out of Pokémon! You won!`)
+        await delay(300)
+        trainerIsOutro.value = true
+        trainerAnimClass.value = 'anim-trainer-enter-right'
+        trainerVisible.value = true
+        saveStore.trainerWins[encounter.trainerId] = (saveStore.trainerWins[encounter.trainerId] ?? 0) + 1
+        saveStore.save()
+        battleOver.value = true
+      }
+    } else {
+      log(`Wild ${enemyName.value} fainted!`)
+      battleOver.value = true
+    }
     return
   }
 
@@ -593,7 +655,15 @@ async function onCatch() {
   }
 }
 
-// ── Init ──────────────────────────────────────────────────────────
+// ── Navigation ────────────────────────────────────────────────────
+function goBack() {
+  // Reset trainer encounter flag so next wild battle is clean
+  encounter.isTrainer = false
+  encounter.trainerId = ''
+  encounter.trainerTeam = []
+  router.push('/game')
+}
+
 function goToHealthCenter() {
   saveStore.team.forEach(slot => {
     if (!slot.id) return
@@ -604,11 +674,14 @@ function goToHealthCenter() {
       if (entry) m.pp = entry.pp
     })
   })
+  encounter.isTrainer = false
+  encounter.trainerId = ''
+  encounter.trainerTeam = []
   saveStore.save()
   router.push('/game')
 }
 
-onMounted(() => {
+onMounted(async () => {
   const hasAlive = saveStore.team.some(s => s.id > 0 && s.hp > 0)
   if (!hasAlive) {
     battleOver.value = true
@@ -620,13 +693,33 @@ onMounted(() => {
   playerHP.value = active.value?.hp ?? playerMaxHP.value
   pickEnemyMoves()
   loadPlayerMoves()
-  log(`A wild ${enemyName.value} appeared!`)
-  // Mark seen on battle start
-  const bid = String(rivalNum.value)
-  if (saveStore.pokedex[bid] !== 'caught') saveStore.pokedex[bid] = 'seen'
-  if (encounter.shiny && saveStore.shinydex[bid] !== 'caught') saveStore.shinydex[bid] = 'seen'
-  saveStore.save()
-  setTimeout(() => { canAct.value = true }, 600)
+
+  if (encounter.isTrainer) {
+    // Show trainer sprite for 3 seconds
+    trainerVisible.value = true
+    log(`${encounter.trainerName} wants to battle!`)
+    await delay(3000)
+    // Trainer exits to the right
+    trainerAnimClass.value = 'anim-trainer-exit-right'
+    await delay(500)
+    trainerVisible.value = false
+    trainerAnimClass.value = ''
+    // First Pokémon enters from the top
+    log(`${encounter.trainerName} sent out ${enemyName.value}!`)
+    pokemonVisible.value = true
+    pokemonAnimClass.value = 'anim-pokemon-enter'
+    await delay(500)
+    pokemonAnimClass.value = ''
+    canAct.value = true
+  } else {
+    pokemonVisible.value = true
+    log(`A wild ${enemyName.value} appeared!`)
+    const bid = String(rivalNum.value)
+    if (saveStore.pokedex[bid] !== 'caught') saveStore.pokedex[bid] = 'seen'
+    if (encounter.shiny && saveStore.shinydex[bid] !== 'caught') saveStore.shinydex[bid] = 'seen'
+    saveStore.save()
+    setTimeout(() => { canAct.value = true }, 600)
+  }
 })
 </script>
 
@@ -780,6 +873,36 @@ main {
 
 /* ── Disabled ── */
 .act-disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.trainer-slot { cursor: default; pointer-events: none; }
+
+/* ── Trainer / Pokémon entrance & exit animations ── */
+.rival-trainer-img { width: 150%; display: block; }
+
+@keyframes kf-trainer-exit-right {
+  from { transform: translateX(0);     opacity: 1; }
+  to   { transform: translateX(180px); opacity: 0; }
+}
+@keyframes kf-trainer-enter-left {
+  from { transform: translateX(-180px); opacity: 0; }
+  to   { transform: translateX(0);      opacity: 1; }
+}
+@keyframes kf-trainer-enter-right {
+  from { transform: translateX(180px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+@keyframes kf-pokemon-enter {
+  from { transform: translateY(-80px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+@keyframes kf-pokemon-faint {
+  from { transform: translateY(0);    opacity: 1; }
+  to   { transform: translateY(60px); opacity: 0; }
+}
+.anim-trainer-exit-right { animation: kf-trainer-exit-right 0.5s  ease-in  forwards; }
+.anim-trainer-enter-left  { animation: kf-trainer-enter-left  0.5s ease-out forwards; }
+.anim-trainer-enter-right { animation: kf-trainer-enter-right 0.5s ease-out forwards; }
+.anim-pokemon-enter      { animation: kf-pokemon-enter       0.45s ease-out forwards; }
+.anim-pokemon-faint      { animation: kf-pokemon-faint       0.55s ease-in  forwards; }
 .slot-choose { animation: pulse-slot 0.8s ease-in-out infinite alternate; cursor: pointer; }
 @keyframes pulse-slot { from { background-color: #a6a6a6; } to { background-color: #4a8a4a; } }
 .slot-dead { background-color: #5a2020 !important; color: #884444 !important; }
