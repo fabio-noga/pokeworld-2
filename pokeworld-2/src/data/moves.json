@@ -1,0 +1,884 @@
+{
+    "1":  {
+              "pp":  25,
+              "power":  20,
+              "name":  "Absorb",
+              "type":  15,
+              "acc":  100
+          },
+    "2":  {
+              "pp":  20,
+              "power":  15,
+              "name":  "Barrage",
+              "type":  1,
+              "acc":  85
+          },
+    "3":  {
+              "pp":  20,
+              "power":  15,
+              "name":  "Bind",
+              "type":  1,
+              "acc":  85
+          },
+    "4":  {
+              "pp":  25,
+              "power":  60,
+              "name":  "Bite",
+              "type":  1,
+              "acc":  100
+          },
+    "5":  {
+              "pp":  5,
+              "power":  110,
+              "name":  "Blizzard",
+              "type":  10,
+              "acc":  70
+          },
+    "6":  {
+              "pp":  15,
+              "power":  85,
+              "name":  "Body Slam",
+              "type":  1,
+              "acc":  100
+          },
+    "7":  {
+              "pp":  20,
+              "power":  65,
+              "name":  "Bone Club",
+              "type":  7,
+              "acc":  85
+          },
+    "8":  {
+              "pp":  10,
+              "power":  50,
+              "name":  "Bonemerang",
+              "type":  7,
+              "acc":  90
+          },
+    "9":  {
+              "pp":  30,
+              "power":  40,
+              "name":  "Bubble",
+              "type":  4,
+              "acc":  100
+          },
+    "10":  {
+               "pp":  20,
+               "power":  65,
+               "name":  "Bubble Beam",
+               "type":  4,
+               "acc":  100
+           },
+    "11":  {
+               "pp":  10,
+               "power":  35,
+               "name":  "Clamp",
+               "type":  4,
+               "acc":  85
+           },
+    "12":  {
+               "pp":  15,
+               "power":  18,
+               "name":  "Comet Punch",
+               "type":  1,
+               "acc":  85
+           },
+    "13":  {
+               "pp":  25,
+               "power":  50,
+               "name":  "Confusion",
+               "type":  8,
+               "acc":  100
+           },
+    "14":  {
+               "pp":  35,
+               "power":  10,
+               "name":  "Constrict",
+               "type":  1,
+               "acc":  100
+           },
+    "15":  {
+               "pp":  10,
+               "power":  100,
+               "name":  "Crabhammer",
+               "type":  4,
+               "acc":  90
+           },
+    "16":  {
+               "pp":  30,
+               "power":  50,
+               "name":  "Cut",
+               "type":  1,
+               "acc":  95
+           },
+    "17":  {
+               "pp":  10,
+               "power":  80,
+               "name":  "Dig",
+               "type":  7,
+               "acc":  100
+           },
+    "18":  {
+               "pp":  10,
+               "power":  70,
+               "name":  "Dizzy Punch",
+               "type":  1,
+               "acc":  100
+           },
+    "19":  {
+               "pp":  30,
+               "power":  30,
+               "name":  "Double Kick",
+               "type":  3,
+               "acc":  100
+           },
+    "20":  {
+               "pp":  15,
+               "power":  120,
+               "name":  "Double-Edge",
+               "type":  1,
+               "acc":  100
+           },
+    "21":  {
+               "pp":  10,
+               "power":  40,
+               "name":  "Dragon Rage",
+               "type":  12,
+               "acc":  100
+           },
+    "22":  {
+               "pp":  15,
+               "power":  100,
+               "name":  "Dream Eater",
+               "type":  8,
+               "acc":  100
+           },
+    "23":  {
+               "pp":  20,
+               "power":  80,
+               "name":  "Drill Peck",
+               "type":  16,
+               "acc":  100
+           },
+    "24":  {
+               "pp":  10,
+               "power":  100,
+               "name":  "Earthquake",
+               "type":  7,
+               "acc":  100
+           },
+    "25":  {
+               "pp":  10,
+               "power":  100,
+               "name":  "Egg Bomb",
+               "type":  1,
+               "acc":  75
+           },
+    "26":  {
+               "pp":  25,
+               "power":  40,
+               "name":  "Ember",
+               "type":  2,
+               "acc":  100
+           },
+    "27":  {
+               "pp":  5,
+               "power":  250,
+               "name":  "Explosion",
+               "type":  1,
+               "acc":  100
+           },
+    "28":  {
+               "pp":  5,
+               "power":  110,
+               "name":  "Fire Blast",
+               "type":  2,
+               "acc":  85
+           },
+    "29":  {
+               "pp":  15,
+               "power":  75,
+               "name":  "Fire Punch",
+               "type":  2,
+               "acc":  100
+           },
+    "30":  {
+               "pp":  15,
+               "power":  35,
+               "name":  "Fire Spin",
+               "type":  2,
+               "acc":  85
+           },
+    "31":  {
+               "pp":  30,
+               "power":  40,
+               "name":  "Acid",
+               "type":  5,
+               "acc":  100
+           },
+    "32":  {
+               "pp":  15,
+               "power":  90,
+               "name":  "Flamethrower",
+               "type":  2,
+               "acc":  100
+           },
+    "33":  {
+               "pp":  15,
+               "power":  90,
+               "name":  "Fly",
+               "type":  16,
+               "acc":  95
+           },
+    "34":  {
+               "pp":  20,
+               "power":  15,
+               "name":  "Fury Attack",
+               "type":  1,
+               "acc":  85
+           },
+    "35":  {
+               "pp":  15,
+               "power":  18,
+               "name":  "Fury Swipes",
+               "type":  1,
+               "acc":  80
+           },
+    "36":  {
+               "pp":  35,
+               "power":  40,
+               "name":  "Gust",
+               "type":  1,
+               "acc":  100
+           },
+    "37":  {
+               "pp":  15,
+               "power":  70,
+               "name":  "Headbutt",
+               "type":  1,
+               "acc":  100
+           },
+    "38":  {
+               "pp":  10,
+               "power":  130,
+               "name":  "High Jump Kick",
+               "type":  3,
+               "acc":  90
+           },
+    "39":  {
+               "pp":  25,
+               "power":  65,
+               "name":  "Horn Attack",
+               "type":  1,
+               "acc":  100
+           },
+    "40":  {
+               "pp":  5,
+               "power":  110,
+               "name":  "Hydro Pump",
+               "type":  4,
+               "acc":  80
+           },
+    "41":  {
+               "pp":  5,
+               "power":  150,
+               "name":  "Hyper Beam",
+               "type":  1,
+               "acc":  90
+           },
+    "42":  {
+               "pp":  15,
+               "power":  80,
+               "name":  "Hyper Fang",
+               "type":  1,
+               "acc":  90
+           },
+    "43":  {
+               "pp":  10,
+               "power":  90,
+               "name":  "Ice Beam",
+               "type":  10,
+               "acc":  100
+           },
+    "44":  {
+               "pp":  15,
+               "power":  75,
+               "name":  "Ice Punch",
+               "type":  10,
+               "acc":  100
+           },
+    "45":  {
+               "pp":  10,
+               "power":  100,
+               "name":  "Jump Kick",
+               "type":  3,
+               "acc":  95
+           },
+    "46":  {
+               "pp":  25,
+               "power":  50,
+               "name":  "Karate Chop",
+               "type":  3,
+               "acc":  100
+           },
+    "47":  {
+               "pp":  15,
+               "power":  20,
+               "name":  "Leech Life",
+               "type":  11,
+               "acc":  100
+           },
+    "48":  {
+               "pp":  30,
+               "power":  30,
+               "name":  "Lick",
+               "type":  13,
+               "acc":  100
+           },
+    "49":  {
+               "pp":  15,
+               "power":  40,
+               "name":  "Mega Drain",
+               "type":  15,
+               "acc":  100
+           },
+    "50":  {
+               "pp":  5,
+               "power":  120,
+               "name":  "Mega Kick",
+               "type":  1,
+               "acc":  75
+           },
+    "51":  {
+               "pp":  20,
+               "power":  80,
+               "name":  "Mega Punch",
+               "type":  1,
+               "acc":  85
+           },
+    "52":  {
+               "pp":  20,
+               "power":  40,
+               "name":  "Pay Day",
+               "type":  1,
+               "acc":  100
+           },
+    "53":  {
+               "pp":  35,
+               "power":  35,
+               "name":  "Peck",
+               "type":  16,
+               "acc":  100
+           },
+    "54":  {
+               "pp":  10,
+               "power":  120,
+               "name":  "Petal Dance",
+               "type":  15,
+               "acc":  100
+           },
+    "55":  {
+               "pp":  20,
+               "power":  25,
+               "name":  "Pin Missile",
+               "type":  11,
+               "acc":  95
+           },
+    "56":  {
+               "pp":  35,
+               "power":  15,
+               "name":  "Poison Sting",
+               "type":  5,
+               "acc":  100
+           },
+    "57":  {
+               "pp":  35,
+               "power":  40,
+               "name":  "Pound",
+               "type":  1,
+               "acc":  100
+           },
+    "58":  {
+               "pp":  20,
+               "power":  65,
+               "name":  "Psybeam",
+               "type":  8,
+               "acc":  100
+           },
+    "59":  {
+               "pp":  30,
+               "power":  40,
+               "name":  "Quick Attack",
+               "type":  1,
+               "acc":  100
+           },
+    "60":  {
+               "pp":  20,
+               "power":  20,
+               "name":  "Rage",
+               "type":  1,
+               "acc":  100
+           },
+    "61":  {
+               "pp":  25,
+               "power":  55,
+               "name":  "Razor Leaf",
+               "type":  15,
+               "acc":  95
+           },
+    "62":  {
+               "pp":  10,
+               "power":  80,
+               "name":  "Razor Wind",
+               "type":  1,
+               "acc":  100
+           },
+    "63":  {
+               "pp":  10,
+               "power":  50,
+               "name":  "Rock Slide",
+               "type":  9,
+               "acc":  90
+           },
+    "64":  {
+               "pp":  15,
+               "power":  50,
+               "name":  "Rock Throw",
+               "type":  9,
+               "acc":  90
+           },
+    "65":  {
+               "pp":  15,
+               "power":  60,
+               "name":  "Rolling Kick",
+               "type":  3,
+               "acc":  85
+           },
+    "66":  {
+               "pp":  35,
+               "power":  40,
+               "name":  "Scratch",
+               "type":  1,
+               "acc":  100
+           },
+    "67":  {
+               "pp":  5,
+               "power":  200,
+               "name":  "Self-Destruct",
+               "type":  1,
+               "acc":  100
+           },
+    "68":  {
+               "pp":  10,
+               "power":  130,
+               "name":  "Skull Bash",
+               "type":  1,
+               "acc":  100
+           },
+    "69":  {
+               "pp":  5,
+               "power":  140,
+               "name":  "Sky Attack",
+               "type":  16,
+               "acc":  90
+           },
+    "70":  {
+               "pp":  20,
+               "power":  80,
+               "name":  "Slam",
+               "type":  1,
+               "acc":  75
+           },
+    "71":  {
+               "pp":  20,
+               "power":  70,
+               "name":  "Slash",
+               "type":  1,
+               "acc":  100
+           },
+    "72":  {
+               "pp":  20,
+               "power":  65,
+               "name":  "Sludge",
+               "type":  5,
+               "acc":  100
+           },
+    "73":  {
+               "pp":  20,
+               "power":  30,
+               "name":  "Smog",
+               "type":  5,
+               "acc":  70
+           },
+    "74":  {
+               "pp":  10,
+               "power":  120,
+               "name":  "Solar Beam",
+               "type":  15,
+               "acc":  100
+           },
+    "75":  {
+               "pp":  15,
+               "power":  20,
+               "name":  "Spike Cannon",
+               "type":  1,
+               "acc":  100
+           },
+    "76":  {
+               "pp":  20,
+               "power":  65,
+               "name":  "Stomp",
+               "type":  1,
+               "acc":  100
+           },
+    "77":  {
+               "pp":  15,
+               "power":  80,
+               "name":  "Strenght",
+               "type":  1,
+               "acc":  100
+           },
+    "78":  {
+               "pp":  100,
+               "power":  50,
+               "name":  "Struggle",
+               "type":  1,
+               "acc":  100
+           },
+    "79":  {
+               "pp":  25,
+               "power":  80,
+               "name":  "Submission",
+               "type":  3,
+               "acc":  80
+           },
+    "80":  {
+               "pp":  15,
+               "power":  90,
+               "name":  "Surf",
+               "type":  4,
+               "acc":  100
+           },
+    "81":  {
+               "pp":  35,
+               "power":  50,
+               "name":  "Tackle",
+               "type":  1,
+               "acc":  100
+           },
+    "82":  {
+               "pp":  20,
+               "power":  90,
+               "name":  "Take Down",
+               "type":  1,
+               "acc":  85
+           },
+    "83":  {
+               "pp":  10,
+               "power":  120,
+               "name":  "Thrash",
+               "type":  1,
+               "acc":  100
+           },
+    "84":  {
+               "pp":  10,
+               "power":  110,
+               "name":  "Thunder",
+               "type":  6,
+               "acc":  70
+           },
+    "85":  {
+               "pp":  15,
+               "power":  75,
+               "name":  "Thunder Punch",
+               "type":  6,
+               "acc":  100
+           },
+    "86":  {
+               "pp":  30,
+               "power":  40,
+               "name":  "Thunder Shock",
+               "type":  6,
+               "acc":  100
+           },
+    "87":  {
+               "pp":  15,
+               "power":  90,
+               "name":  "Thunderbolt",
+               "type":  6,
+               "acc":  100
+           },
+    "88":  {
+               "pp":  10,
+               "power":  80,
+               "name":  "Tri Attack",
+               "type":  1,
+               "acc":  100
+           },
+    "89":  {
+               "pp":  20,
+               "power":  25,
+               "name":  "Twineedle",
+               "type":  11,
+               "acc":  100
+           },
+    "90":  {
+               "pp":  30,
+               "power":  55,
+               "name":  "Vice Grip",
+               "type":  1,
+               "acc":  100
+           },
+    "91":  {
+               "pp":  25,
+               "power":  45,
+               "name":  "Vine Whip",
+               "type":  15,
+               "acc":  100
+           },
+    "92":  {
+               "pp":  25,
+               "power":  40,
+               "name":  "Water Gun",
+               "type":  4,
+               "acc":  100
+           },
+    "93":  {
+               "pp":  15,
+               "power":  80,
+               "name":  "Waterfall",
+               "type":  4,
+               "acc":  100
+           },
+    "94":  {
+               "pp":  35,
+               "power":  60,
+               "name":  "Wing Attack",
+               "type":  16,
+               "acc":  100
+           },
+    "95":  {
+               "pp":  20,
+               "power":  15,
+               "name":  "Wrap",
+               "type":  1,
+               "acc":  90
+           },
+    "96":  {
+               "pp":  25,
+               "power":  0,
+               "name":  "Growl",
+               "type":  1,
+               "acc":  100
+           },
+    "97":  {
+               "pp":  10,
+               "power":  0,
+               "name":  "Leech Seed",
+               "type":  15,
+               "acc":  90
+           },
+    "98":  {
+               "pp":  15,
+               "power":  0,
+               "name":  "Sleep Powder",
+               "type":  15,
+               "acc":  75
+           },
+    "99":  {
+               "pp":  30,
+               "power":  0,
+               "name":  "Stun Spore",
+               "type":  15,
+               "acc":  75
+           },
+    "100":  {
+                "pp":  15,
+                "power":  0,
+                "name":  "Spore",
+                "type":  15,
+                "acc":  100
+            },
+    "101":  {
+                "pp":  10,
+                "power":  90,
+                "name":  "Psychic",
+                "type":  8,
+                "acc":  100
+            },
+    "102":  {
+                "pp":  20,
+                "power":  0,
+                "name":  "Hypnosis",
+                "type":  8,
+                "acc":  60
+            },
+    "103":  {
+                "pp":  20,
+                "power":  0,
+                "name":  "Amnesia",
+                "type":  8,
+                "acc":  100
+            },
+    "104":  {
+                "pp":  30,
+                "power":  0,
+                "name":  "Agility",
+                "type":  8,
+                "acc":  100
+            },
+    "105":  {
+                "pp":  40,
+                "power":  0,
+                "name":  "Meditate",
+                "type":  8,
+                "acc":  100
+            },
+    "106":  {
+                "pp":  10,
+                "power":  0,
+                "name":  "Toxic",
+                "type":  5,
+                "acc":  85
+            },
+    "107":  {
+                "pp":  40,
+                "power":  0,
+                "name":  "Poison Gas",
+                "type":  5,
+                "acc":  55
+            },
+    "108":  {
+                "pp":  35,
+                "power":  0,
+                "name":  "Poison Powder",
+                "type":  5,
+                "acc":  75
+            },
+    "109":  {
+                "pp":  40,
+                "power":  0,
+                "name":  "Acid Armor",
+                "type":  5,
+                "acc":  100
+            },
+    "110":  {
+                "pp":  20,
+                "power":  0,
+                "name":  "Thunder Wave",
+                "type":  6,
+                "acc":  100
+            },
+    "111":  {
+                "pp":  20,
+                "power":  65,
+                "name":  "Aurora Beam",
+                "type":  10,
+                "acc":  100
+            },
+    "112":  {
+                "pp":  30,
+                "power":  0,
+                "name":  "Mist",
+                "type":  10,
+                "acc":  100
+            },
+    "113":  {
+                "pp":  30,
+                "power":  0,
+                "name":  "Haze",
+                "type":  10,
+                "acc":  100
+            },
+    "114":  {
+                "pp":  15,
+                "power":  0,
+                "name":  "Night Shade",
+                "type":  13,
+                "acc":  100
+            },
+    "115":  {
+                "pp":  10,
+                "power":  0,
+                "name":  "Confuse Ray",
+                "type":  13,
+                "acc":  100
+            },
+    "116":  {
+                "pp":  20,
+                "power":  60,
+                "name":  "Swift",
+                "type":  1,
+                "acc":  100
+            },
+    "117":  {
+                "pp":  30,
+                "power":  0,
+                "name":  "Swords Dance",
+                "type":  1,
+                "acc":  100
+            },
+    "118":  {
+                "pp":  20,
+                "power":  0,
+                "name":  "Recover",
+                "type":  1,
+                "acc":  100
+            },
+    "119":  {
+                "pp":  30,
+                "power":  0,
+                "name":  "Harden",
+                "type":  1,
+                "acc":  100
+            },
+    "120":  {
+                "pp":  40,
+                "power":  0,
+                "name":  "Screech",
+                "type":  1,
+                "acc":  85
+            },
+    "121":  {
+                "pp":  15,
+                "power":  0,
+                "name":  "Sand Attack",
+                "type":  1,
+                "acc":  100
+            },
+    "122":  {
+                "pp":  20,
+                "power":  0,
+                "name":  "Minimize",
+                "type":  1,
+                "acc":  100
+            },
+    "123":  {
+                "pp":  40,
+                "power":  0,
+                "name":  "Withdraw",
+                "type":  1,
+                "acc":  100
+            },
+    "124":  {
+                "pp":  20,
+                "power":  50,
+                "name":  "Low Kick",
+                "type":  3,
+                "acc":  90
+            },
+    "125":  {
+                "pp":  20,
+                "power":  0,
+                "name":  "Seismic Toss",
+                "type":  3,
+                "acc":  100
+            },
+    "126":  {
+                "pp":  20,
+                "power":  0,
+                "name":  "Counter",
+                "type":  3,
+                "acc":  100
+            }
+}

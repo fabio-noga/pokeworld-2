@@ -1,0 +1,184 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap');
+
+/* ── Reset ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: sans-serif; }
+
+/* ── Header red bar ─────────────────────────────────────────────── */
+#red {
+  position: fixed;
+  top: 0;
+  height: 70px;
+  width: 100%;
+  left: 0;
+  right: 0;
+  z-index: 200;
+}
+#red > div {
+  background-color: #cc0000;
+  width: 100%;
+  height: 100%;
+  box-shadow: 0 3px 0 #880000;
+}
+
+/* ── Black center stripe (Pokéball divider) ─────────────────────── */
+#pokelines {
+  position: fixed;
+  width: 100%;
+  top: 20px;
+  left: 0;
+  z-index: 201;
+  pointer-events: none;
+}
+#pokelines > div {
+  margin: auto;
+  width: 128px;
+}
+#pokelines > div > div {
+  position: absolute;
+  top: 30px;
+  height: 30px;
+  left: 0;
+  background-color: black;
+  width: 100%;
+}
+
+/* ── Pokéball ───────────────────────────────────────────────────── */
+#pokebol {
+  position: fixed;
+  width: 128px;
+  top: 3px;
+  height: 128px;
+  left: 80px;
+  z-index: 202;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.25s ease;
+}
+#pokebol:hover { transform: rotate(20deg) scale(1.05); }
+#pokebol > div { margin: auto; width: 128px; }
+#pokebol > div > img { width: 128px; height: 128px; display: inline-block; }
+
+/* ── App navigation (right side of header) ──────────────────────── */
+#app-nav {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 16px 20px;
+  z-index: 202;
+}
+
+/* Ghost divider between links and action button */
+#app-nav::before {
+  content: '';
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.3);
+  margin: 0 8px;
+  order: 99;
+}
+
+/* ── Nav links — text with animated underline ───────────────────── */
+.nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  padding: 0 10px;
+  color: rgba(255, 255, 255, 0.75);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  text-decoration: none;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.nav-link:hover  { color: #fff; }
+.nav-link.router-link-active { color: #fff; }
+
+/* Underline — collapses to center, expands on hover/active */
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  right: 50%;
+  height: 2px;
+  background: #fff;
+  border-radius: 1px;
+  transition: left 0.2s ease, right 0.2s ease;
+}
+.nav-link:hover::after,
+.nav-link.router-link-active::after {
+  left: 10px;
+  right: 10px;
+}
+
+.nav-icon {
+  font-size: 11px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4));
+}
+
+/* ── Action button — text with permanent underline ──────────────── */
+#nav-btn {
+  order: 100;
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: auto;
+  padding: 0 10px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  transition: color 0.15s;
+}
+/* Permanent underline */
+#nav-btn::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  background: #fff;
+  border-radius: 1px;
+}
+#nav-btn:hover { color: rgba(255,255,255,0.8); }
+#nav-btn > p   { padding: 0; margin: 0; }
+
+/* ── Gear / save icon — far left of nav links ───────────────────── */
+#gear-btn {
+  order: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: auto;
+  margin-right: 4px;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  transition: color 0.15s, transform 0.3s ease;
+}
+#gear-btn:hover {
+  color: #fff;
+  transform: rotate(90deg);
+}
+#gear-btn.router-link-active {
+  color: #fff;
+}
