@@ -6,6 +6,7 @@
       <!-- Enemy HUD -->
       <div class="enemy-hud">
         <div class="hud-name">
+          <span v-if="isEnemyShiny" class="shiny-badge" title="Shiny!">✨</span>
           {{ enemyName }}
           <img v-if="saveStore.pokedex[String(rivalNum)] === 'caught'" src="/textures/HUD/Pokeball.png" class="hud-ball" />
           <span class="hud-lv">Lv.{{ encounter.level }}</span>
@@ -16,7 +17,10 @@
 
       <!-- Player HUD -->
       <div class="player-hud">
-        <div class="hud-name">{{ playerName }} <span class="hud-lv">Lv.{{ playerLvl }}</span></div>
+        <div class="hud-name">
+          <span v-if="isPlayerShiny" class="shiny-badge" title="Shiny!">✨</span>
+          {{ playerName }} <span class="hud-lv">Lv.{{ playerLvl }}</span>
+        </div>
         <div class="hp-bar-wrap"><div class="hp-bar" :style="playerHpStyle"></div></div>
         <div class="hud-hp">{{ playerHP }}/{{ playerMaxHP }}</div>
       </div>
@@ -169,8 +173,16 @@ const shakeKey = ref(0)
 
 // ── Sprites ───────────────────────────────────────────────────────
 const rivalNum = computed(() => encounter.number > 0 ? encounter.number : 25)
-const rivalSprite = computed(() => `/textures/Battle/Normal/Front/Gif/${padId(rivalNum.value)}.gif`)
-const playerPokemonSprite = computed(() => `/textures/Battle/Normal/Back/Gif/${padId(active.value?.id ?? 1)}.gif`)
+const isEnemyShiny = computed(() => encounter.shiny)
+const isPlayerShiny = computed(() => active.value?.shiny ?? false)
+const rivalSprite = computed(() => {
+  const variant = isEnemyShiny.value ? 'Shiny' : 'Normal'
+  return `/textures/Battle/${variant}/Front/Gif/${padId(rivalNum.value)}.gif`
+})
+const playerPokemonSprite = computed(() => {
+  const variant = isPlayerShiny.value ? 'Shiny' : 'Normal'
+  return `/textures/Battle/${variant}/Back/Gif/${padId(active.value?.id ?? 1)}.gif`
+})
 
 // ── Names / levels ────────────────────────────────────────────────
 const enemyName = computed(() => pokedex(rivalNum.value))
@@ -544,7 +556,13 @@ async function onCatch() {
   if (caught) {
     captureSuccess.value = true
     log(`Gotcha! ${enemyName.value} was caught!`)
-    saveStore.pokedex[String(rivalNum.value)] = 'caught'
+    const dexId = String(rivalNum.value)
+    if (encounter.shiny) {
+      saveStore.shinydex[dexId] = 'caught'
+      saveStore.pokedex[dexId] = 'caught'
+    } else {
+      saveStore.pokedex[dexId] = 'caught'
+    }
     const catchXp = Math.floor(encounter.level * 5 + Math.random() * 20)
     awardXp(catchXp)
     const caught = {
@@ -554,6 +572,7 @@ async function onCatch() {
       xp: 0,
       moves: enemyMoves.value.map(m => ({ id: m.id, pp: m.entry.pp })),
       slot: 0,
+      shiny: encounter.shiny,
     }
     const slot = saveStore.team.findIndex(s => s.id === 0)
     if (slot !== -1) {
@@ -602,6 +621,11 @@ onMounted(() => {
   pickEnemyMoves()
   loadPlayerMoves()
   log(`A wild ${enemyName.value} appeared!`)
+  // Mark seen on battle start
+  const bid = String(rivalNum.value)
+  if (saveStore.pokedex[bid] !== 'caught') saveStore.pokedex[bid] = 'seen'
+  if (encounter.shiny && saveStore.shinydex[bid] !== 'caught') saveStore.shinydex[bid] = 'seen'
+  saveStore.save()
   setTimeout(() => { canAct.value = true }, 600)
 })
 </script>
@@ -653,6 +677,7 @@ main {
 .hud-name { font-weight: bold; margin-bottom: 3px; display: flex; align-items: center; gap: 4px; }
 .hud-ball { width: 12px; height: 12px; vertical-align: middle; }
 .hud-lv { font-weight: normal; font-size: 11px; }
+.shiny-badge { font-size: 13px; line-height: 1; }
 .hud-hp { font-size: 11px; margin-top: 2px; }
 .hp-bar-wrap { width: 100%; height: 6px; background: #555; border-radius: 3px; overflow: hidden; }
 .hp-bar { height: 100%; border-radius: 3px; transition: width 0.3s, background-color 0.3s; }

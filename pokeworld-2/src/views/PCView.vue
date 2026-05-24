@@ -42,7 +42,10 @@
                     </div>
                   </div>
                   <img :src="`/textures/Mini/Png/${padId(saveStore.pc[cell - 1].id)}.png`" alt="" />
-                  <div class="card-name">{{ saveStore.pc[cell - 1].nickname || pokedex(saveStore.pc[cell - 1].id) }}</div>
+                  <div class="card-name">
+                    <span v-if="saveStore.pc[cell - 1].shiny" class="shiny-star">✨</span>
+                    {{ saveStore.pc[cell - 1].nickname || pokedex(saveStore.pc[cell - 1].id) }}
+                  </div>
                   <div class="card-lvl">LV.{{ saveStore.pc[cell - 1].lvl }}</div>
                   <div class="bar-row">
                     <span class="bar-label">{{ saveStore.pc[cell - 1].hp }}/{{ calcMaxHP(saveStore.pc[cell - 1].id, saveStore.pc[cell - 1].lvl) }}</span>
@@ -123,7 +126,10 @@
               <template v-if="slot.id">
                 <img :src="`/textures/Mini/Gif/${padId(slot.id)}.gif`" alt="" />
                 <div class="slot-info">
-                  <div class="slot-name">{{ slot.nickname || pokedex(slot.id) }}</div>
+                  <div class="slot-name">
+                    <span v-if="slot.shiny" class="shiny-star">✨</span>
+                    {{ slot.nickname || pokedex(slot.id) }}
+                  </div>
                   <div class="bar-row">
                     <span class="bar-label">{{ slot.hp }}/{{ calcMaxHP(slot.id, slot.lvl) }}</span>
                     <div class="slot-hp-bar">
@@ -433,14 +439,23 @@ function hpColor(pct: number): string {
 }
 
 // ── Evolution ─────────────────────────────────────────────────────
-function evolveSlot(slot: { id: number; lvl: number; hp: number; pendingEvo?: number }) {
+function evolveSlot(slot: { id: number; lvl: number; hp: number; pendingEvo?: number; shiny?: boolean }) {
   if (!slot.pendingEvo) return
   const oldMaxHP = calcMaxHP(slot.id, slot.lvl)
+  const isShiny = slot.shiny ?? false
   slot.id = slot.pendingEvo
   const newMaxHP = calcMaxHP(slot.id, slot.lvl)
   const hpGain = Math.max(0, newMaxHP - oldMaxHP)
   slot.hp = Math.min(slot.hp + hpGain, newMaxHP)
   slot.pendingEvo = undefined
+  // Register evolved form as caught in the Pokédex
+  const dexId = String(slot.id)
+  if (isShiny) {
+    saveStore.shinydex[dexId] = 'caught'
+    saveStore.pokedex[dexId] = 'caught'
+  } else {
+    saveStore.pokedex[dexId] = 'caught'
+  }
   saveStore.save()
 }
 
@@ -797,6 +812,7 @@ main {
   align-self: flex-start;
 }
 
+.shiny-star { font-size: 11px; line-height: 1; }
 .card-name {
   font-family: 'VT323', monospace;
   font-size: 13px;

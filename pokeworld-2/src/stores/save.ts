@@ -13,6 +13,7 @@ export interface TeamSlot {
   slot: number
   pendingEvo?: number
   nickname?: string
+  shiny?: boolean
 }
 
 export interface SaveData {
@@ -41,11 +42,14 @@ export const useSaveStore = defineStore('save', () => {
   const team = ref<TeamSlot[]>([])
   const pc = ref<TeamSlot[]>([])
   const pokedex = ref<Record<string, 'seen' | 'caught'>>({})
+  const shinydex = ref<Record<string, 'seen' | 'caught'>>({})
   const xpShare = ref(false)
   const xpMultiplier = ref(3)
+  const mapPos = ref(468)  // tile index; 468 = default spawn
+  const mapDir = ref(1)   // resting sprite frame: 1=down, 4=left, 7=right, 10=up
 
   // Passed from game → battle via Pinia (replaces the classic POST form)
-  const encounter = reactive({ number: 0, level: 0 })
+  const encounter = reactive({ number: 0, level: 0, shiny: false })
 
   function initDefaultSave() {
     playerData.nome = 'Player'
@@ -53,6 +57,7 @@ export const useSaveStore = defineStore('save', () => {
     playerData.dinheiro = 200
     playerData.gym = 0
     playerData.lvlMax = 100
+    mapPos.value = 468
     team.value = [
       { id: 1, lvl: 7, hp: calcMaxHP(45, 7), xp: 0, moves: [{ id: 81, pp: 35 }, { id: 96, pp: 25 }, { id: 91, pp: 25 }, { id: 61, pp: 25 }], slot: 1 },
       { id: 0, lvl: 0, hp: 0, xp: 0, moves: [], slot: 2 },
@@ -76,8 +81,11 @@ export const useSaveStore = defineStore('save', () => {
       team.value = data.team ?? []
       pc.value = data.pc ?? []
       pokedex.value = data.pokedex ?? {}
+      shinydex.value = (data as any).shinydex ?? {}
       xpShare.value = (data as any).xpShare ?? false
       xpMultiplier.value = (data as any).xpMultiplier ?? 3
+      mapPos.value = (data as any).mapPos ?? 468
+      mapDir.value = (data as any).mapDir ?? 1
       return true
     } catch {
       initDefaultSave()
@@ -92,8 +100,11 @@ export const useSaveStore = defineStore('save', () => {
       team: team.value,
       pc: pc.value,
       pokedex: { ...pokedex.value },
+      shinydex: { ...shinydex.value },
       xpShare: xpShare.value,
       xpMultiplier: xpMultiplier.value,
+      mapPos: mapPos.value,
+      mapDir: mapDir.value,
     }
     localStorage.setItem(SAVE_KEY, encodeSave(data))
   }
@@ -127,6 +138,9 @@ export const useSaveStore = defineStore('save', () => {
       { id: 0, lvl: 0, hp: 0, xp: 0, moves: [], slot: 6 },
     ]
     pokedex.value = { [starterPoke]: 'caught' }
+    shinydex.value = {}
+    mapPos.value = 468
+    mapDir.value = 1
     save()
   }
 
@@ -160,8 +174,11 @@ export const useSaveStore = defineStore('save', () => {
     team,
     pc,
     pokedex,
+    shinydex,
     xpShare,
     xpMultiplier,
+    mapPos,
+    mapDir,
     encounter,
     load,
     save,

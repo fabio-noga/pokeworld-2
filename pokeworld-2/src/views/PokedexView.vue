@@ -8,11 +8,22 @@
         <!-- ① LIST  — col 1-2 · row 1-9 -->
         <div class="bento-cell cell-list">
           <div class="list-head">
-            <span class="list-title">POKÉDEX</span>
-            <span class="list-counts">
-              <span class="cnt-caught">{{ caughtCount }}✓</span>
-              <span class="cnt-seen">{{ seenCount }}👁</span>
-            </span>
+            <div class="list-title-row">
+              <span class="list-title">POKÉDEX</span>
+              <button class="tpe-btn" :class="{ active: tpeMode }" @click="tpeMode = !tpeMode" title="True Player Experience">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+            <div class="list-counts">
+              <div class="cnt-row">
+                <span class="cnt-caught">{{ caughtCount }}✓</span>
+                <span class="cnt-seen">{{ seenCount }}👁</span>
+              </div>
+              <div class="cnt-row">
+                <span class="cnt-shiny-caught">{{ shinyCaughtCount }}✨✓</span>
+                <span class="cnt-shiny-seen">{{ shinySeenCount }}✨👁</span>
+              </div>
+            </div>
           </div>
           <div class="list-search-bar">
             <input v-model="search" class="list-input" placeholder="Search…" aria-label="Search Pokémon" />
@@ -26,11 +37,16 @@
               role="option" :aria-selected="selectedId === i"
               @click="selectPokemon(i)"
             >
-              <img :src="`/textures/Mini/Png/${padId(i)}.png`" :alt="pokedex(i)" width="20" height="20" loading="lazy" />
+              <img :src="`/textures/Mini/Png/${padId(i)}.png`" :alt="pokedex(i)" width="20" height="20" loading="lazy"
+                   :class="{ 'sprite-unknown': !isKnown(i) }" />
               <span class="li-num">#{{ padId(i) }}</span>
-              <span class="li-name">{{ pokedex(i) }}</span>
-              <span v-if="saveStore.pokedex[String(i)] === 'caught'" class="li-dot dot-caught">●</span>
-              <span v-else-if="saveStore.pokedex[String(i)] === 'seen'" class="li-dot dot-seen">●</span>
+              <span class="li-name">{{ isKnown(i) ? pokedex(i) : '???' }}</span>
+              <template v-if="isKnown(i)">
+                <span v-if="saveStore.pokedex[String(i)] === 'caught'" class="li-dot dot-caught">●</span>
+                <span v-else-if="saveStore.pokedex[String(i)] === 'seen'" class="li-dot dot-seen">●</span>
+                <span v-if="saveStore.shinydex[String(i)] === 'caught'" class="li-dot dot-shiny-caught">✨</span>
+                <span v-else-if="saveStore.shinydex[String(i)] === 'seen'" class="li-dot dot-shiny-seen">✨</span>
+              </template>
             </div>
           </div>
         </div>
@@ -44,32 +60,44 @@
         >
           <span class="nav-arrow">◀</span>
           <template v-if="selectedId > 1">
-            <img class="nav-sprite" :src="`/textures/Mini/Png/${padId(selectedId - 1)}.png`" :alt="pokedex(selectedId - 1)" />
+            <img class="nav-sprite"
+                 :src="`/textures/Mini/Png/${padId(selectedId - 1)}.png`"
+                 :alt="isKnown(selectedId - 1) ? pokedex(selectedId - 1) : '???'"
+                 :class="{ 'sprite-unknown': !isKnown(selectedId - 1) }" />
             <div class="nav-info nav-info-l">
-              <span class="nav-name">{{ pokedex(selectedId - 1) }}</span>
+              <span class="nav-name">{{ isKnown(selectedId - 1) ? pokedex(selectedId - 1) : '???' }}</span>
               <span class="nav-num">#{{ padId(selectedId - 1) }}</span>
             </div>
           </template>
         </button>
 
         <!-- ③ TITLE / HERO  — col 4-6 · row 1 -->
-        <div class="bento-cell cell-hero" :style="heroStyle">
+        <div class="bento-cell cell-hero" :style="selectedKnown ? heroStyle : {}">
           <img class="hero-gif"
                :src="`/textures/Mini/Gif/${padId(selectedId)}.gif`"
-               alt="" width="48" height="48" />
+               alt="" width="48" height="48"
+               :class="{ 'sprite-unknown': !selectedKnown }" />
           <div class="hero-info">
             <div class="hero-row">
-              <h1 class="hero-name">{{ selectedName }}</h1>
+              <h1 class="hero-name">{{ selectedKnown ? selectedName : '???' }}</h1>
               <span class="hero-num">#{{ padId(selectedId) }}</span>
             </div>
             <div class="hero-row">
               <div class="hero-types">
-                <span v-for="t in selectedTypes" :key="t" class="type-badge" :style="{ backgroundColor: TYPE_COLORS[t] ?? '#888' }">
-                  {{ TYPE_NAMES[t] ?? '???' }}
-                </span>
+                <template v-if="selectedKnown">
+                  <span v-for="t in selectedTypes" :key="t" class="type-badge" :style="{ backgroundColor: TYPE_COLORS[t] ?? '#888' }">
+                    {{ TYPE_NAMES[t] ?? '???' }}
+                  </span>
+                </template>
+                <span v-else class="type-badge" style="background:#555">???</span>
               </div>
-              <span v-if="saveStore.pokedex[String(selectedId)] === 'caught'" class="dex-status caught">● CAUGHT</span>
-              <span v-else-if="saveStore.pokedex[String(selectedId)] === 'seen'" class="dex-status seen">● SEEN</span>
+              <template v-if="selectedKnown">
+                <span v-if="saveStore.pokedex[String(selectedId)] === 'caught'" class="dex-status caught">● CAUGHT</span>
+                <span v-else-if="saveStore.pokedex[String(selectedId)] === 'seen'" class="dex-status seen">● SEEN</span>
+                <span v-else class="dex-status unknown">? UNKNOWN</span>
+                <span v-if="saveStore.shinydex[String(selectedId)] === 'caught'" class="dex-status shiny-caught">✨ SHINY CAUGHT</span>
+                <span v-else-if="saveStore.shinydex[String(selectedId)] === 'seen'" class="dex-status shiny-seen">✨ SHINY SEEN</span>
+              </template>
               <span v-else class="dex-status unknown">? UNKNOWN</span>
             </div>
           </div>
@@ -84,10 +112,13 @@
         >
           <template v-if="selectedId < 151">
             <div class="nav-info nav-info-r">
-              <span class="nav-name">{{ pokedex(selectedId + 1) }}</span>
+              <span class="nav-name">{{ isKnown(selectedId + 1) ? pokedex(selectedId + 1) : '???' }}</span>
               <span class="nav-num">#{{ padId(selectedId + 1) }}</span>
             </div>
-            <img class="nav-sprite" :src="`/textures/Mini/Png/${padId(selectedId + 1)}.png`" :alt="pokedex(selectedId + 1)" />
+            <img class="nav-sprite"
+                 :src="`/textures/Mini/Png/${padId(selectedId + 1)}.png`"
+                 :alt="isKnown(selectedId + 1) ? pokedex(selectedId + 1) : '???'"
+                 :class="{ 'sprite-unknown': !isKnown(selectedId + 1) }" />
           </template>
           <span class="nav-arrow">▶</span>
         </button>
@@ -100,16 +131,24 @@
               <div class="art-tv-crt-wrap">
                 <Transition name="channel" mode="out-in">
                   <div class="art-tv-content" :key="selectedId">
-                    <img class="art-img"
-                         :src="`/textures/Art/${padId(selectedId)}.png`"
-                         :alt="selectedName"
-                         width="300" height="300" />
-                    <template v-if="pokemonDescription">
-                      <div class="art-dialogue" v-show="bubbleVisible">
-                        <button class="dlg-toggle" @click.stop="bubbleVisible = false" aria-label="Hide description">▼</button>
-                        <p class="art-dialogue-text">{{ pokemonDescription }}<span class="art-dlg-cur">♥</span></p>
+                    <template v-if="selectedKnown">
+                      <img class="art-img"
+                           :src="`/textures/Art/${padId(selectedId)}.png`"
+                           :alt="selectedName"
+                           width="300" height="300" />
+                      <template v-if="pokemonDescription">
+                        <div class="art-dialogue" v-show="bubbleVisible">
+                          <button class="dlg-toggle" @click.stop="bubbleVisible = false" aria-label="Hide description">▼</button>
+                          <p class="art-dialogue-text">{{ pokemonDescription }}<span class="art-dlg-cur">♥</span></p>
+                        </div>
+                        <button class="dlg-show-tab" v-show="!bubbleVisible" @click="bubbleVisible = true" aria-label="Show description">▲</button>
+                      </template>
+                    </template>
+                    <template v-else>
+                      <img class="art-img" src="/textures/Art/000.png" alt="???" width="300" height="300" />
+                      <div class="art-dialogue">
+                        <p class="art-dialogue-text">You haven't seen this Pokémon yet.<span class="art-dlg-cur">♥</span></p>
                       </div>
-                      <button class="dlg-show-tab" v-show="!bubbleVisible" @click="bubbleVisible = true" aria-label="Show description">▲</button>
                     </template>
                   </div>
                 </Transition>
@@ -128,72 +167,107 @@
         <!-- ⑥ BASE STATS  — col 5-7 · row 2-4 -->
         <div class="bento-cell cell-stats">
           <div class="cell-heading">BASE STATS</div>
-          <div v-for="s in statRows" :key="s.key" class="stat-row">
-            <span class="stat-lbl">{{ s.label }}</span>
-            <span class="stat-val">{{ s.value }}</span>
-            <div class="stat-bar-bg">
-              <div class="stat-bar-fill" :style="{ width: Math.round(s.value / 255 * 100) + '%', backgroundColor: s.color }"></div>
+          <template v-if="selectedCaught">
+            <div v-for="s in statRows" :key="s.key" class="stat-row">
+              <span class="stat-lbl">{{ s.label }}</span>
+              <span class="stat-val">{{ s.value }}</span>
+              <div class="stat-bar-bg">
+                <div class="stat-bar-fill" :style="{ width: Math.round(s.value / 255 * 100) + '%', backgroundColor: s.color }"></div>
+              </div>
             </div>
-          </div>
-          <div class="stats-total">TOTAL <span class="stats-total-val">{{ statTotal }}</span></div>
+            <div class="stats-total">TOTAL <span class="stats-total-val">{{ statTotal }}</span></div>
+          </template>
+          <template v-else>
+            <div v-for="s in statRows" :key="s.key" class="stat-row">
+              <span class="stat-lbl">{{ s.label }}</span>
+              <span class="stat-val stat-unknown">???</span>
+              <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:0%"></div></div>
+            </div>
+            <div class="stats-total">TOTAL <span class="stats-total-val stat-unknown">???</span></div>
+          </template>
         </div>
 
         <!-- ⑦ EVOLVES  — col 3-7 · row 5 -->
         <div class="bento-cell cell-evo">
 
-          <!-- Linear chain (most Pokémon) -->
-          <div v-if="evoChain" class="evo-chain">
-            <template v-for="(stage, i) in evoChain" :key="stage.id">
-              <button
-                class="evo-stage"
-                :class="{ 'evo-current': selectedId === stage.id }"
-                @click="selectPokemon(stage.id)"
-                :title="pokedex(stage.id)"
-              >
-                <img class="evo-sprite" :src="`/textures/Mini/Png/${padId(stage.id)}.png`" :alt="pokedex(stage.id)" width="32" height="32" />
-                <span class="evo-name">{{ pokedex(stage.id) }}</span>
-              </button>
-              <div v-if="stage.next" class="evo-connector">
-                <span class="evo-arr">▶</span>
-                <span class="evo-trig">{{ triggerLabel(stage.next) }}</span>
-              </div>
-            </template>
-          </div>
+          <!-- helper: one chain row (normal or shiny) -->
+          <template v-for="shiny in (showShinyEvo ? [false, true] : [false])" :key="String(shiny)">
 
-          <!-- Eevee branching evolution -->
-          <div v-else-if="isEeveeFamily" class="evo-chain evo-eevee">
-            <button
-              class="evo-stage"
-              :class="{ 'evo-current': selectedId === EEVEE_BASE_ID }"
-              @click="selectPokemon(EEVEE_BASE_ID)"
-              title="Eevee"
-            >
-              <img class="evo-sprite" :src="`/textures/Mini/Png/${padId(EEVEE_BASE_ID)}.png`" alt="Eevee" width="32" height="32" />
-              <span class="evo-name">{{ pokedex(EEVEE_BASE_ID) }}</span>
-            </button>
-            <div class="evo-branches">
-              <div v-for="branch in EEVEE_BRANCHES" :key="branch.id" class="evo-branch">
-                <div class="evo-connector">
-                  <span class="evo-arr">▶</span>
-                  <span class="evo-trig">{{ branch.stone }}</span>
-                </div>
+            <div v-if="shiny" class="evo-divider"><span>✨ Shiny</span></div>
+            <div v-else-if="showShinyEvo" class="evo-divider"><span>Normal</span></div>
+
+            <!-- Linear chain -->
+            <div v-if="evoChain" class="evo-chain" :class="{ 'evo-chain-shiny': shiny }">
+              <template v-for="stage in evoChain" :key="stage.id">
                 <button
                   class="evo-stage"
-                  :class="{ 'evo-current': selectedId === branch.id }"
-                  @click="selectPokemon(branch.id)"
-                  :title="pokedex(branch.id)"
+                  :class="{ 'evo-current': selectedId === stage.id, 'evo-unknown': !isKnown(stage.id) }"
+                  @click="selectPokemon(stage.id)"
+                  :title="isKnown(stage.id) ? pokedex(stage.id) : '???'"
                 >
-                  <img class="evo-sprite" :src="`/textures/Mini/Png/${padId(branch.id)}.png`" :alt="pokedex(branch.id)" width="32" height="32" />
-                  <span class="evo-name">{{ pokedex(branch.id) }}</span>
+                  <img class="evo-sprite" :src="spriteSrc(stage.id, shiny)"
+                       :class="{ 'sprite-unknown': !isKnown(stage.id) }"
+                       :alt="isKnown(stage.id) ? pokedex(stage.id) : '???'" width="32" height="32" />
+                  <span class="evo-name">{{ isKnown(stage.id) ? pokedex(stage.id) : '???' }}</span>
                 </button>
+                <div v-if="stage.next" class="evo-connector">
+                  <span class="evo-arr">▶</span>
+                  <span class="evo-trig">{{ triggerLabel(stage.next) }}</span>
+                </div>
+              </template>
+            </div>
+
+            <!-- Eevee branching -->
+            <div v-else-if="isEeveeFamily" class="evo-chain evo-eevee" :class="{ 'evo-chain-shiny': shiny }">
+              <button
+                class="evo-stage"
+                :class="{ 'evo-current': selectedId === EEVEE_BASE_ID, 'evo-unknown': !isKnown(EEVEE_BASE_ID) }"
+                @click="selectPokemon(EEVEE_BASE_ID)"
+                :title="isKnown(EEVEE_BASE_ID) ? 'Eevee' : '???'"
+              >
+                <img class="evo-sprite" :src="spriteSrc(EEVEE_BASE_ID, shiny)"
+                     :class="{ 'sprite-unknown': !isKnown(EEVEE_BASE_ID) }"
+                     alt="Eevee" width="32" height="32" />
+                <span class="evo-name">{{ isKnown(EEVEE_BASE_ID) ? pokedex(EEVEE_BASE_ID) : '???' }}</span>
+              </button>
+              <div class="evo-branches">
+                <div v-for="branch in EEVEE_BRANCHES" :key="branch.id" class="evo-branch">
+                  <div class="evo-connector">
+                    <span class="evo-arr">▶</span>
+                    <span class="evo-trig">{{ branch.stone }}</span>
+                  </div>
+                  <button
+                    class="evo-stage"
+                    :class="{ 'evo-current': selectedId === branch.id, 'evo-unknown': !isKnown(branch.id) }"
+                    @click="selectPokemon(branch.id)"
+                    :title="isKnown(branch.id) ? pokedex(branch.id) : '???'"
+                  >
+                    <img class="evo-sprite" :src="spriteSrc(branch.id, shiny)"
+                         :class="{ 'sprite-unknown': !isKnown(branch.id) }"
+                         :alt="isKnown(branch.id) ? pokedex(branch.id) : '???'" width="32" height="32" />
+                    <span class="evo-name">{{ isKnown(branch.id) ? pokedex(branch.id) : '???' }}</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- No evolution -->
-          <div v-else class="evo-chain">
-            <span class="evo-none">Does not evolve</span>
-          </div>
+            <!-- No evolution -->
+            <div v-else class="evo-chain">
+              <button
+                class="evo-stage evo-current"
+                :class="{ 'evo-unknown': !selectedKnown }"
+                @click="selectPokemon(selectedId)"
+              >
+                <img class="evo-sprite"
+                     :src="spriteSrc(selectedId, shiny)"
+                     :class="{ 'sprite-unknown': !selectedKnown }"
+                     :alt="selectedKnown ? selectedName : '???'"
+                     width="32" height="32" />
+                <span class="evo-name">{{ selectedKnown ? selectedName : '???' }}</span>
+              </button>
+            </div>
+
+          </template>
 
         </div>
 
@@ -201,7 +275,7 @@
         <div class="bento-cell cell-learnset">
           <div class="cell-heading-red">
             <span>LEVEL-UP MOVES</span>
-            <span class="section-count">{{ learnsetRows.length }} moves</span>
+            <span class="section-count">{{ selectedCaught ? learnsetRows.length + ' moves' : '???' }}</span>
           </div>
           <div class="learnset-table" role="table" aria-label="Level-up moves">
             <div class="lt-head" role="row">
@@ -212,19 +286,24 @@
               <span class="lt-pp"   role="columnheader">PP</span>
               <span class="lt-acc"  role="columnheader">ACC</span>
             </div>
-            <div v-for="entry in learnsetRows" :key="entry.id" class="lt-row" role="row">
-              <span class="lt-lv"   role="cell">{{ entry.level === 0 ? '—' : entry.level }}</span>
-              <span class="lt-name" role="cell">{{ entry.name }}</span>
-              <span class="lt-type" role="cell">
-                <span class="type-badge-sm" :style="{ backgroundColor: TYPE_COLORS[entry.type] ?? '#888' }">
-                  {{ TYPE_NAMES[entry.type] ?? '???' }}
+            <template v-if="selectedCaught">
+              <div v-for="entry in learnsetRows" :key="entry.id" class="lt-row" role="row">
+                <span class="lt-lv"   role="cell">{{ entry.level === 0 ? '—' : entry.level }}</span>
+                <span class="lt-name" role="cell">{{ entry.name }}</span>
+                <span class="lt-type" role="cell">
+                  <span class="type-badge-sm" :style="{ backgroundColor: TYPE_COLORS[entry.type] ?? '#888' }">
+                    {{ TYPE_NAMES[entry.type] ?? '???' }}
+                  </span>
                 </span>
-              </span>
-              <span class="lt-pwr"  role="cell">{{ entry.power > 0 ? entry.power : '—' }}</span>
-              <span class="lt-pp"   role="cell">{{ entry.pp }}</span>
-              <span class="lt-acc"  role="cell">{{ entry.acc }}%</span>
+                <span class="lt-pwr"  role="cell">{{ entry.power > 0 ? entry.power : '—' }}</span>
+                <span class="lt-pp"   role="cell">{{ entry.pp }}</span>
+                <span class="lt-acc"  role="cell">{{ entry.acc }}%</span>
+              </div>
+              <div v-if="learnsetRows.length === 0" class="lt-empty">No learnset data</div>
+            </template>
+            <div v-else-if="selectedKnown" class="lt-catch-hint" role="row">
+              <span>Catch this Pokémon to know more</span>
             </div>
-            <div v-if="learnsetRows.length === 0" class="lt-empty">No learnset data</div>
           </div>
         </div>
 
@@ -274,14 +353,26 @@ const TYPE_NAMES: Record<number, string> = {
   11: 'BUG', 12: 'DRAGON', 13: 'GHOST', 15: 'GRASS', 16: 'FLYING',
 }
 
+// ── True Player Experience ───────────────────────────────────────────
+const tpeMode = ref(true)
+
+function isKnown(id: number): boolean {
+  if (!tpeMode.value) return true
+  return !!saveStore.pokedex[String(id)]
+}
+const selectedKnown  = computed(() => isKnown(selectedId.value))
+const selectedCaught = computed(() => !tpeMode.value || saveStore.pokedex[String(selectedId.value)] === 'caught')
+
 // ── TV power ─────────────────────────────────────────────────────────
 const tvOn         = ref(true)
 const bubbleVisible = ref(true)
 
 // ── Search ───────────────────────────────────────────────────────────
 const search = ref('')
-const caughtCount = computed(() => Object.values(saveStore.pokedex).filter(v => v === 'caught').length)
-const seenCount   = computed(() => Object.values(saveStore.pokedex).filter(v => v === 'seen').length)
+const caughtCount      = computed(() => Object.values(saveStore.pokedex).filter(v => v === 'caught').length)
+const seenCount        = computed(() => Object.values(saveStore.pokedex).filter(v => v === 'seen').length)
+const shinyCaughtCount = computed(() => Object.values(saveStore.shinydex).filter(v => v === 'caught').length)
+const shinySeenCount   = computed(() => Object.values(saveStore.shinydex).filter(v => v === 'seen').length)
 function matchesSearch(id: number): boolean {
   if (!search.value) return true
   const q = search.value.toLowerCase()
@@ -335,8 +426,15 @@ const statRows = computed(() => {
 const statTotal = computed(() => statRows.value.reduce((sum, r) => sum + r.value, 0))
 
 // ── Evolution ────────────────────────────────────────────────────────
-const evoChain     = computed(() => findChain(selectedId.value))
+const evoChain      = computed(() => findChain(selectedId.value))
 const isEeveeFamily = computed(() => isEeveeLine(selectedId.value))
+const showShinyEvo = computed(() => saveStore.shinydex[String(selectedId.value)] === 'caught')
+
+function spriteSrc(id: number, shiny: boolean): string {
+  return shiny
+    ? `/textures/Battle/Shiny/Front/Png/${id}.png`
+    : `/textures/Battle/Normal/Front/Png/${id}.png`
+}
 
 function triggerLabel(t: EvoTrigger): string {
   if (t.type === 'level') return `Lv.${t.level}`
@@ -453,12 +551,55 @@ onMounted(() => {
 }
 .list-counts {
   font-family: 'VT323', monospace;
-  font-size: 13px;
+  font-size: 14px;
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
 }
-.cnt-caught { color: #c8ffc8; }
-.cnt-seen   { color: #ffe0c0; }
+.cnt-row {
+  display: flex;
+  gap: 8px;
+}
+.cnt-caught       { color: #c8ffc8; }
+.cnt-seen         { color: #ffe0c0; }
+.cnt-shiny-caught { color: #ffe97a; }
+.cnt-shiny-seen   { color: #ffd0f0; }
+
+/* ── TPE toggle ──────────────────────────────────────────────────── */
+.list-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tpe-btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.5);
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background 0.15s, color 0.15s;
+}
+.tpe-btn.active { background: rgba(255,255,255,0.9); color: #c82020; }
+.tpe-btn:not(.active):hover { background: rgba(255,255,255,0.3); color: #fff; }
+
+/* ── Unknown / silhouette states ─────────────────────────────────── */
+.sprite-unknown {
+  filter: brightness(0);
+}
+.evo-unknown {
+  opacity: 0.45;
+}
+.stat-unknown { color: #aaa; font-style: italic; }
+.art-unknown-screen {
+  width: 100%;
+  flex: 1;
+  background: #fff;
+  border-radius: 4px;
+}
 
 .list-search-bar {
   padding: 6px 8px;
@@ -508,8 +649,10 @@ onMounted(() => {
 .li-num  { font-family: 'VT323', monospace; font-size: 12px; color: #6080a0; min-width: 28px; flex-shrink: 0; }
 .li-name { font-family: 'VT323', monospace; font-size: 14px; color: #181830; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .li-dot  { font-size: 9px; flex-shrink: 0; }
-.dot-caught { color: #1a8030; }
-.dot-seen   { color: #c07010; }
+.dot-caught      { color: #1a8030; }
+.dot-seen        { color: #c07010; }
+.dot-shiny-caught { font-size: 9px; }
+.dot-shiny-seen   { font-size: 9px; opacity: 0.5; }
 
 /* ═══════════════════════════════════════
    ② PREV  &  ④ NEXT
@@ -622,9 +765,11 @@ onMounted(() => {
   border: 2px solid;
   letter-spacing: 0.2px;
 }
-.dex-status.caught  { color: #1a6020; border-color: #1a6020; background: #e8f8e8; }
-.dex-status.seen    { color: #8a4800; border-color: #c07010; background: #fff8e0; }
-.dex-status.unknown { color: #a0b0c0; border-color: #b8d4e8; background: #f0f8ff; }
+.dex-status.caught       { color: #1a6020; border-color: #1a6020; background: #e8f8e8; }
+.dex-status.seen         { color: #8a4800; border-color: #c07010; background: #fff8e0; }
+.dex-status.unknown      { color: #a0b0c0; border-color: #b8d4e8; background: #f0f8ff; }
+.dex-status.shiny-caught { color: #7a5500; border-color: #e6b800; background: #fffbe0; }
+.dex-status.shiny-seen   { color: #8a3070; border-color: #d080b0; background: #fdf0f8; }
 
 /* ═══════════════════════════════════════
    ⑤ ART — full TV panel
@@ -931,7 +1076,9 @@ onMounted(() => {
    ═══════════════════════════════════════ */
 .cell-evo {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   padding: 10px 16px;
   overflow-x: auto;
 }
@@ -942,6 +1089,33 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+.evo-chain-shiny {
+  background: linear-gradient(90deg, rgba(255,220,80,0.08), rgba(255,180,240,0.08));
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+/* Divider label between normal and shiny rows */
+.evo-divider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+}
+.evo-divider span {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #2848a8;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+.evo-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #c0d4f0;
 }
 
 /* Eevee branches — base left, branches stacked right */
@@ -1098,6 +1272,16 @@ onMounted(() => {
   text-align: center;
   padding: 24px;
   background: #fff;
+}
+.lt-catch-hint {
+  font-family: 'VT323', monospace;
+  font-size: 17px;
+  color: #8090b0;
+  font-style: italic;
+  text-align: center;
+  padding: 20px 12px;
+  background: #fff;
+  border-bottom: 1px solid #d0e8f4;
 }
 
 /* ── Responsive ── */

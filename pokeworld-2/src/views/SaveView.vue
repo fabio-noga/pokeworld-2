@@ -24,6 +24,7 @@
             <div class="stat-row"><span class="stat-label">Team</span><span class="stat-val">{{ activeTeam }} Pokémon</span></div>
             <div class="stat-row"><span class="stat-label">PC</span><span class="stat-val">{{ saveStore.pc.filter(p => p.id > 0).length }} stored</span></div>
             <div class="stat-row"><span class="stat-label">Pokédex</span><span class="stat-val">{{ caughtCount }} caught / {{ seenCount }} seen</span></div>
+            <div class="stat-row"><span class="stat-label">Shiny</span><span class="stat-val">✨ {{ shinyCaughtCount }} caught</span></div>
           </div>
         </div>
         <div class="no-save" v-else>No save found</div>
@@ -113,6 +114,7 @@ const wipeMsg = ref('')
 const activeTeam = computed(() => saveStore.team.filter(p => p.id > 0).length)
 const caughtCount = computed(() => Object.values(saveStore.pokedex).filter(v => v === 'caught').length)
 const seenCount = computed(() => Object.values(saveStore.pokedex).length)
+const shinyCaughtCount = computed(() => Object.values(saveStore.shinydex).filter(v => v === 'caught').length)
 
 function handleExport() {
   saveStore.exportSave()

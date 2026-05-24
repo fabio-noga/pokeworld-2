@@ -30,7 +30,7 @@
 
   <!-- Wild encounter HUD (TrackerBush) -->
   <div id="TrackerBush" :style="{ visibility: tracker.visible ? 'visible' : 'hidden' }">
-    <h3 id="trackername"><b>{{ tracker.name }}</b></h3>
+    <h3 id="trackername"><b>{{ tracker.shiny ? '✨ ' : '' }}{{ tracker.name }}</b></h3>
     <div class="trackerdiv">
       <img v-if="tracker.img" id="trackerimg" :src="tracker.img" />
     </div>
@@ -73,7 +73,7 @@
            @drop="onDrop(i)"
            @dragend="dragFrom = -1; dragOver = -1">
         <div class="slot-text">
-          <p>{{ slotLabel(slot) }}</p>
+          <p>{{ slot.shiny ? '✨ ' : '' }}{{ slotLabel(slot) }}</p>
           <div class="slot-hp-bar">
             <div class="slot-hp-fill" :style="{ width: hpPercent(slot)*100+'%', backgroundColor: hpColor(hpPercent(slot)) }"></div>
           </div>
@@ -129,7 +129,8 @@ const tileArray: number[] = []
 
 const mapOffset = reactive({ x: 0, y: 0 })
 const moving = ref(false)
-let playerPosition = 468  // exact classic PlayerPosition value from game.php
+let playerPosition = saveStore.mapPos ?? 468
+let facingFrame = saveStore.mapDir ?? 1  // resting sprite frame: 1=down 4=left 7=right 10=up
 
 const playerSprite = ref('')
 const petSprite = ref('')
@@ -142,6 +143,7 @@ const tracker = reactive({
   level: 0,
   img: '',
   number: 0,
+  shiny: false,
 })
 
 const padOn = ref(false)
@@ -240,13 +242,21 @@ function checkBattle() {
       const minLvl = teamLevels.length ? Math.min(...teamLevels) : 2
       const maxLvl = teamLevels.length ? Math.max(...teamLevels) : 5
       const lvl = Math.max(1, Math.floor(Math.random() * (maxLvl - minLvl + 1)) + minLvl)
+      const isShiny = Math.floor(Math.random() * 4) === 0
       tracker.number = num
       tracker.level = lvl
       tracker.name = pokedex(num)
       tracker.img = `/textures/Art/${padId(num)}.png`
       tracker.visible = true
+      tracker.shiny = isShiny
       saveStore.encounter.number = num
       saveStore.encounter.level = lvl
+      saveStore.encounter.shiny = isShiny
+      // Mark seen (never downgrade caught → seen)
+      const id = String(num)
+      if (saveStore.pokedex[id] !== 'caught') saveStore.pokedex[id] = 'seen'
+      if (isShiny && saveStore.shinydex[id] !== 'caught') saveStore.shinydex[id] = 'seen'
+      saveStore.save()
     } else {
       tracker.visible = false
     }
@@ -278,6 +288,7 @@ function onKey(keyCode: number) {
     // UP
     if (stepToggle === 0) { setPlayerSprite(11); stepToggle++ }
     else { setPlayerSprite(12); stepToggle = 0 }
+    facingFrame = 10
     setTimeout(() => setPlayerSprite(10), 250)
 
     if (tileArray[playerPosition - MAP_WIDTH] !== 4 && tileArray[playerPosition - MAP_WIDTH] !== 6) {
@@ -294,13 +305,14 @@ function onKey(keyCode: number) {
         petPos.left = middle.left
         pet1ZIndex.value = 2
       }, 220)
-      setTimeout(() => { moving.value = false }, 400)
+      setTimeout(() => { moving.value = false; savePosition() }, 400)
     }
 
   } else if (keyCode === 40) {
     // DOWN
     if (stepToggle === 0) { setPlayerSprite(2); stepToggle++ }
     else { setPlayerSprite(3); stepToggle = 0 }
+    facingFrame = 1
     setTimeout(() => setPlayerSprite(1), 250)
 
     if (tileArray[playerPosition + MAP_WIDTH] !== 4 && tileArray[playerPosition + MAP_WIDTH] !== 6) {
@@ -318,7 +330,7 @@ function onKey(keyCode: number) {
         petPos.left = middle.left
         pet1ZIndex.value = 0
       }, 220)
-      setTimeout(() => { moving.value = false }, 400)
+      setTimeout(() => { moving.value = false; savePosition() }, 400)
     } else if (tileArray[playerPosition + MAP_WIDTH] === 6) {
       moving.value = true
       playerPosition += MAP_WIDTH * 2
@@ -333,12 +345,13 @@ function onKey(keyCode: number) {
         petPos.left = middle.left
         pet1ZIndex.value = 0
       }, 220)
-      setTimeout(() => { moving.value = false }, 400)
+      setTimeout(() => { moving.value = false; savePosition() }, 400)
     }
 
   } else if (keyCode === 37) {
     // LEFT
     setPlayerSprite(5)
+    facingFrame = 4
     setTimeout(() => setPlayerSprite(4), 250)
 
     if (tileArray[playerPosition - 1] !== 4 && tileArray[playerPosition - 1] !== 6) {
@@ -355,12 +368,13 @@ function onKey(keyCode: number) {
         petPos.left = middle.left + 38
         petPos.top = middle.top + 30
       }, 220)
-      setTimeout(() => { moving.value = false }, 400)
+      setTimeout(() => { moving.value = false; savePosition() }, 400)
     }
 
   } else if (keyCode === 39) {
     // RIGHT
     setPlayerSprite(9)
+    facingFrame = 7
     setTimeout(() => setPlayerSprite(7), 250)
 
     if (tileArray[playerPosition + 1] !== 4 && tileArray[playerPosition + 1] !== 6) {
@@ -378,9 +392,15 @@ function onKey(keyCode: number) {
         petPos.left = middle.left - 38
         petPos.top = middle.top + 30
       }, 220)
-      setTimeout(() => { moving.value = false }, 400)
+      setTimeout(() => { moving.value = false; savePosition() }, 400)
     }
   }
+}
+
+function savePosition() {
+  saveStore.mapPos = playerPosition
+  saveStore.mapDir = facingFrame
+  saveStore.save()
 }
 
 function handleKeyDown(e: KeyboardEvent) {
@@ -440,11 +460,23 @@ function onDrop(i: number) {
 
 // ── Pet walking animation (identical to game.php setInterval) ────
 let petInterval: ReturnType<typeof setInterval>
-const petType = 'Normal'
 const slot1Id = computed(() => saveStore.team[0]?.id ?? 1)
+const slot1Shiny = computed(() => saveStore.team[0]?.shiny ?? false)
+
+const SHINY_FOLDERS: Record<number, string> = {
+  1: 'Front', 2: 'Front2',
+  3: 'Left',  4: 'Left2',
+  5: 'Right', 6: 'Right2',
+  7: 'Back',  8: 'Back2',
+}
 
 function updatePetSprite() {
-  petSprite.value = `/textures/Overworld/${petType}/${petPosition1}/${slot1Id.value}.png`
+  if (slot1Shiny.value) {
+    const folder = SHINY_FOLDERS[petPosition1] ?? 'Front'
+    petSprite.value = `/textures/Overworld/Shiny/${folder}/${slot1Id.value}.png`
+  } else {
+    petSprite.value = `/textures/Overworld/Normal/${petPosition1}/${slot1Id.value}.png`
+  }
 }
 
 // ── Init (equivalent to game.php draw()) ─────────────────────────
@@ -462,22 +494,52 @@ onMounted(() => {
   playerCenter.top = ji / 2 - 78
   playerCenter.left = je / 2 - 50.5
 
-  // Classic formula: center the map image on screen, identical to game.php draw()
-  // mapH=1920 → ji/2-960; mapW=1155 → je/2-577.5
-  // This places the player at map pixel (527, 882) = tile 443 (row 19 col 11)
-  mapOffset.y = ji / 2 - 960
-  mapOffset.x = je / 2 - 577.5
+  // Default spawn offset (tile 468, row 19 col 11 — 0-indexed)
+  const SPAWN = 468
+  const defaultRow = Math.floor((SPAWN - 1) / MAP_WIDTH)
+  const defaultCol = (SPAWN - 1) % MAP_WIDTH
+
+  const savedRow = Math.floor((playerPosition - 1) / MAP_WIDTH)
+  const savedCol = (playerPosition - 1) % MAP_WIDTH
+
+  const rowDelta = savedRow - defaultRow
+  const colDelta = savedCol - defaultCol
+
+  mapOffset.y = ji / 2 - 960 - rowDelta * TILE_SIZE
+  mapOffset.x = je / 2 - 577.5 - colDelta * TILE_SIZE
 
   // Middle1/Middle2 — exact port: Middle1=ji/2-78-10, Middle2=je/2-50.5+3.5
   middle.top = ji / 2 - 78 - 10
   middle.left = je / 2 - 50.5 + 3.5
 
-  // Pet starts at Middle1/Middle2 (DOWN resting position)
-  petPos.top = middle.top
-  petPos.left = middle.left
+  // Restore pet position + sprite based on saved facing direction
+  // facingFrame: 1=down, 4=left, 7=right, 10=up
+  if (facingFrame === 10) {
+    // UP — pet is behind (above) player, higher z-index
+    petPosition1 = 7
+    petPos.top = middle.top + 50
+    petPos.left = middle.left
+    pet1ZIndex.value = 2
+  } else if (facingFrame === 4) {
+    // LEFT — pet is to the right of player
+    petPosition1 = 3
+    petPos.top = middle.top + 30
+    petPos.left = middle.left + 38
+  } else if (facingFrame === 7) {
+    // RIGHT — pet is to the left of player
+    petPosition1 = 5
+    petPos.top = middle.top + 30
+    petPos.left = middle.left - 38
+  } else {
+    // DOWN (default)
+    petPosition1 = 1
+    petPos.top = middle.top
+    petPos.left = middle.left
+    pet1ZIndex.value = 0
+  }
 
-  // Initial sprites
-  setPlayerSprite(1)
+  // Initial sprites — restore saved facing direction
+  setPlayerSprite(facingFrame)
   updatePetSprite()
 
   // Mobile pad visibility
