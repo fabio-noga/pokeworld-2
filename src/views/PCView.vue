@@ -376,11 +376,6 @@ const TYPE_NAMES: Record<number, string> = {
   11: 'BUG', 12: 'DRG', 13: 'GHO', 15: 'GRS', 16: 'FLY',
 }
 
-function getPrimaryType(id: number): number {
-  const s = STATS[String(id)]
-  if (!s) return 1
-  return s.type1 !== 1 ? s.type1 : s.type2
-}
 
 function getTypes(id: number): number[] {
   const s = STATS[String(id)]

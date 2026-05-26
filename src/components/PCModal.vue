@@ -434,7 +434,7 @@ function openMoveEditor(slot: typeof saveStore.team[0], source: 'pc' | 'team' = 
   const legacyEntries: LearnEntry[] = slot.moves
     .filter(m => m.id > 0 && MOVES[String(m.id)] && !knownIds.has(m.id))
     .map(m => ({ id: m.id, level: 0, tag: 'legacy' as const }))
-  const all = [...raw, ...typeMoves, ...legacyEntries]
+  const all: LearnEntry[] = [...raw, ...typeMoves, ...legacyEntries]
   const tagOrder = (t?: string) => t === 'type' ? 1 : t === 'legacy' ? 2 : 0
   const unlocked = all.filter(e => e.level <= slot.lvl && MOVES[String(e.id)]).sort((a, b) => b.level - a.level || tagOrder(a.tag) - tagOrder(b.tag))
   const locked   = all.filter(e => e.level >  slot.lvl && MOVES[String(e.id)]).sort((a, b) => a.level - b.level)
