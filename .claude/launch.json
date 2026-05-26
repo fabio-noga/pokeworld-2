@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pokeworld-2",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173,
+      "cwd": "D:\\Projects\\pokeworld 2.0\\pokeworld-2"
+    }
+  ]
+}

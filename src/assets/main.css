@@ -1,0 +1,122 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap');
+
+/* ── Reset ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: sans-serif; }
+
+/* ── Header red bar ─────────────────────────────────────────────── */
+#red {
+  position: fixed;
+  top: 0;
+  height: 70px;
+  width: 100%;
+  left: 0;
+  right: 0;
+  z-index: 200;
+}
+#red > div {
+  background-color: #cc0000;
+  width: 100%;
+  height: 100%;
+  box-shadow: 0 3px 0 #880000;
+}
+
+/* ── Black center stripe (Pokéball divider) ─────────────────────── */
+#pokelines {
+  position: fixed;
+  width: 100%;
+  top: 20px;
+  left: 0;
+  z-index: 201;
+  pointer-events: none;
+}
+#pokelines > div {
+  margin: auto;
+  width: 128px;
+}
+#pokelines > div > div {
+  position: absolute;
+  top: 30px;
+  height: 30px;
+  left: 0;
+  background-color: black;
+  width: 100%;
+}
+
+/* ── Pokéball ───────────────────────────────────────────────────── */
+#pokebol {
+  position: fixed;
+  width: 128px;
+  top: 3px;
+  height: 128px;
+  left: 80px;
+  z-index: 202;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.25s ease;
+}
+#pokebol:hover { transform: rotate(20deg) scale(1.05); }
+#pokebol > div { margin: auto; width: 128px; }
+#pokebol > div > img { width: 128px; height: 128px; display: inline-block; }
+
+/* ── Top-right nav ───────────────────────────────────────────────── */
+#app-nav {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+  z-index: 202;
+}
+
+.hnav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 12px;
+  color: rgba(255,255,255,0.55);
+  text-decoration: none;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+  font-family: 'Press Start 2P', monospace;
+}
+.hnav-item i    { font-size: 15px; }
+.hnav-item span { font-size: 5px; letter-spacing: 0.5px; }
+.hnav-item:hover              { color: #fff; background: rgba(255,255,255,0.08); }
+.hnav-item.router-link-active { color: #fff; }
+
+/* Pokédex icon — pixel art image instead of FA icon */
+.hnav-dex-img {
+  width: 20px;
+  height: 20px;
+  image-rendering: pixelated;
+  filter: invert(1);
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.hnav-dex:hover .hnav-dex-img,
+.hnav-dex.router-link-active .hnav-dex-img { opacity: 1; }
+
+#logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  font-size: 15px;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: color 0.15s, transform 0.2s;
+  margin-left: 6px;
+  border-left: 1px solid rgba(255,255,255,0.2);
+  height: 36px;
+}
+#logout-btn:hover {
+  color: #fff;
+  transform: translateX(2px);
+}

@@ -1,0 +1,144 @@
+  #body{ 
+    position:absolute;
+    top:0px;
+    bottom:0;
+    height:100%;
+    opacity: 0.6;
+    width:100%;
+    left:0;
+    right:0;
+  }
+  .Img{
+    width:460px;
+    display:inline-block;
+  }
+  .ImgRed{background-color: red;}
+  .ImgGreen{background-color: green;}
+  .ImgBlue{background-color: blue;}
+  .register{
+    visibility:hidden;
+    position:fixed;
+    top:20%;
+    right:0;
+    left:0;
+  }
+  #form{
+    border-top-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+     height:500px;
+     width:300px;
+     margin:auto;
+     background-color:white;
+  }
+  .form2{
+    position:absolute;
+    top:100px;
+    right:0;
+    left:0;
+  }
+  #BackBlack{
+    visibility:hidden;
+    position:fixed;
+    top:0;
+    bottom:0;
+    left:0;
+    right:0;
+    background-color:black;
+    opacity:0.7;
+  }
+  .main{
+    margin: 100px auto; 
+    width:1390px;
+  }
+  .oak{
+        vertical-align: center;
+        text-align: center;
+        margin-top: 5%;
+  }
+  label,input{
+        text-align: center;
+  }
+  .texto{
+        background-color: white;
+        border: blue 1px solid;
+        border-radius: 30px;
+        width:600px;
+        height:200px;
+        text-align: center;
+        margin: auto;
+
+  }
+  .login{
+    position: absolute;
+    top:0px;
+    right:0px;
+  }
+  #registar{
+     background-color: #1E1E1E;
+     opacity: 0.6;
+     width:120px;
+     height: 50px;
+     cursor:pointer;
+     border: none;
+     font-family:verdana;
+     font-size:20px;
+     text-align:center;
+     color:white;
+     border:1 solid black;
+  }
+  #registar:hover{
+     background-color: #dfe1da;
+  }
+  .input{
+    height:30px;
+    font-size: 100%;
+    font-family: verdana;
+    padding:1em;
+
+  }
+  .BackRed {
+    background: -webkit-linear-gradient(#E60000, #F28080); /* For Safari 5.1 to 6.0 */
+    background: -o-linear-gradient(#E60000, #F28080); /* For Opera 11.1 to 12.0 */
+    background: -moz-linear-gradient(#E60000, #F28080); /* For Firefox 3.6 to 15 */
+    background: linear-gradient(#E60000, #F28080); /* Standard syntax */
+  }
+    .BackRed:hover {
+    background: -webkit-linear-gradient(#660000, #FF4D4D); /* For Safari 5.1 to 6.0 */
+    background: -o-linear-gradient(#660000, #FF4D4D); /* For Opera 11.1 to 12.0 */
+    background: -moz-linear-gradient(#660000, #FF4D4D); /* For Firefox 3.6 to 15 */
+    background: linear-gradient(#660000, #FF4D4D); /* Standard syntax */
+  }      
+    .BackBlue {
+    background: -webkit-linear-gradient(#0047B2, #99C2FF); /* For Safari 5.1 to 6.0 */
+    background: -o-linear-gradient(#0047B2, #99C2FF); /* For Opera 11.1 to 12.0 */
+    background: -moz-linear-gradient(#0047B2, #99C2FF); /* For Firefox 3.6 to 15 */
+    background: linear-gradient(#0047B2, #99C2FF); /* Standard syntax */
+  }
+  .BackBlue:hover {
+    background: -webkit-linear-gradient(#00004C, #3385FF); /* For Safari 5.1 to 6.0 */
+    background: -o-linear-gradient(#00004C, #3385FF); /* For Opera 11.1 to 12.0 */
+    background: -moz-linear-gradient(#00004C, #3385FF); /* For Firefox 3.6 to 15 */
+    background: linear-gradient(#00004C, #3385FF); /* Standard syntax */
+  }
+  .BackGreen {
+    background: -webkit-linear-gradient(#005C00, #80CC80); /* For Safari 5.1 to 6.0 */
+    background: -o-linear-gradient(#005C00, #80CC80); /* For Opera 11.1 to 12.0 */
+    background: -moz-linear-gradient(#005C00, #80CC80); /* For Firefox 3.6 to 15 */
+    background: linear-gradient(#005C00, #80CC80); /* Standard syntax */
+  }
+  .BackGreen:hover {
+    background: -webkit-linear-gradient(#003D00, #33AD33); /* For Safari 5.1 to 6.0 */
+    background: -o-linear-gradient(#003D00, #33AD33); /* For Opera 11.1 to 12.0 */
+    background: -moz-linear-gradient(#003D00, #33AD33); /* For Firefox 3.6 to 15 */
+    background: linear-gradient(#003D00, #33AD33); /* Standard syntax */
+  }
+ .Back{
+    width:200px;
+    height:50px;
+    color:white;
+    font-family: verdana;
+    font-size: 30px;
+    border-radius: 10px;
+    border:0;
+    font-weight: bold;
+  }

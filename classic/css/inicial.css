@@ -1,0 +1,136 @@
+main{
+	position: absolute;
+	top:0;
+	left:.0;
+	right:0;
+}
+#s1{
+	filter: blur(6px);
+	-webkit-filter: blur(6px);
+	-moz-filter: blur(6px);
+	-o-filter: blur(6px);
+	-ms-filter: blur(6px);
+	-webkit-background-size: cover;
+	-moz-background-size: cover;
+	-o-background-size: cover;
+	background-size: cover;
+	background-repeat: no-repeat;
+	margin:80px 0 0 0;
+	min-height: 420px;
+}
+#s2>h1{
+	font-size: 60px;
+	color:white;
+	  text-shadow:
+	   -1px -1px 0 #000,  
+	    1px -1px 0 #000,
+	    -1px 1px 0 #000,
+	     1px 1px 0 #000;
+	 margin-left:3%;
+	 margin-top: 100px;
+}
+#s2>h1>span{
+	color:red;
+}
+#s2>p{
+	font-size: 30px;
+	color:white;
+	  text-shadow:
+	   -1px -1px 0 #000,  
+	    1px -1px 0 #000,
+	    -1px 1px 0 #000,
+	     1px 1px 0 #000;
+	 margin-left:3%;
+}
+#s2>p>span{
+	color:#b300b2;
+	cursor: pointer;
+}
+#s2>p>span:hover{
+	color:lightblue;
+}
+#s2{
+	position: absolute;
+	top:80px;
+	left:0;
+	right:0;
+}
+#s3{
+	background-color: #ff1c1c;
+	margin:0;
+	text-shadow:
+	   -1px -1px 0 #000,  
+	    1px -1px 0 #000,
+	    -1px 1px 0 #000,
+	     1px 1px 0 #000;
+	color:white;
+	border-top:10px solid black;
+	border-bottom:10px solid black;
+}
+#s3>h1{
+	margin:0 0 0 3%;
+	font-size: 40px;
+}
+#s3>h1>span{
+	color:#b300b2;
+}
+#s3>p{
+	margin-left:3%;
+}
+.solid{
+	margin-left:6%;
+}
+.objetives{
+	margin: 0 auto 40px auto;
+	border: 1px solid black;
+	overflow: auto;
+	height:300px;
+	display: block;
+	width: 440px;
+}
+.nameup{
+	text-align:center;
+	border-bottom:1px solid black;
+	margin: 40px auto 2px auto;
+	display: block;
+	width: 440px;
+	font-size: 20px;
+	font-weight: bold;
+
+}
+.eb{
+	background-color: #B300B2;
+	margin:0;
+}
+.pl{
+	background-color: #8cff66;
+	margin:0;
+}
+.mi{
+	background-color: #ff4d4d;
+	margin:0;
+}
+.up{
+	background-color: #66b2ff;
+	margin:0;
+}
+#s5{
+	text-align: center;
+	background-color: black;
+	color: white;
+	text-transform: uppercase;
+	padding:20px 0;
+}
+#s5>p{margin:0;font-weight: bold;cursor: pointer;}
+#s5>p:hover{color:grey;}
+@media screen and (max-width: 960px){
+	#s2>h1{text-align: center;margin-top: 50px;}
+	#s2>p{text-align: center;}
+}
+@media screen and (min-width: 960px){
+	#s2{width:960px;}
+}
+@media screen and (max-width: 550px){
+	#s2>h1{font-size:50px;}
+}
+	
