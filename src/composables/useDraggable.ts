@@ -5,11 +5,27 @@ interface Pos { x: number; y: number }
 export function useDraggable(storageKey: string, panelRef: Ref<HTMLElement | null>) {
   const pos = ref<Pos | null>(null)
 
-  // Restore saved position on mount
+  // Restore saved position on mount — clamp to current viewport so
+  // a stale position from a different screen/session never hides the panel.
   onMounted(() => {
     const raw = localStorage.getItem(storageKey)
     if (raw) {
-      try { pos.value = JSON.parse(raw) } catch {}
+      try {
+        const saved = JSON.parse(raw) as Pos
+        const el = panelRef.value
+        const w  = el ? el.offsetWidth  : 300
+        const h  = el ? el.offsetHeight : 200
+        const x  = Math.max(0, Math.min(window.innerWidth  - w, saved.x))
+        const y  = Math.max(0, Math.min(window.innerHeight - h, saved.y))
+        // If the clamped position differs significantly, discard it (off-screen save)
+        if (Math.abs(x - saved.x) > 40 || Math.abs(y - saved.y) > 40) {
+          localStorage.removeItem(storageKey)
+        } else {
+          pos.value = { x, y }
+        }
+      } catch {
+        localStorage.removeItem(storageKey)
+      }
     }
   })
 
