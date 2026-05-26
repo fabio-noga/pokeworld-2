@@ -452,7 +452,7 @@ const tracker = reactive({
 
 const padOn = ref(localStorage.getItem('pkw_pad') === '1')
 const padVisible = ref(localStorage.getItem('pkw_pad') === '1')
-const pokeNavOn = ref(false)
+
 
 // ── CSS position for map (replaces jQuery .animate) ──────────────
 const mapStyle = computed(() => ({
@@ -487,10 +487,7 @@ function triggerPetHop(dur: number) {
 // ── Helpers ──────────────────────────────────────────────────────
 const teamCount = computed(() => saveStore.pc.filter(p => p?.id).length)
 
-function slotLabel(slot: { id: number; lvl: number }) {
-  if (!slot.id) return ''
-  return `${pokedex(slot.id)} | LVL: ${slot.lvl}`
-}
+
 function slotImg(slot: { id: number }, animated = false) {
   if (!slot.id) return ''
   return animated
@@ -823,13 +820,6 @@ function startPad(keyCode: number) {
 
 function stopPad() {
   if (padTimer !== null) { clearInterval(padTimer); padTimer = null }
-}
-function togglePokeNav() {
-  pokeNavOn.value = !pokeNavOn.value
-  const el1 = document.getElementById('PlayerStats')
-  const el2 = document.getElementById('PlayerTracker')
-  if (el1) el1.style.visibility = pokeNavOn.value ? 'hidden' : 'visible'
-  if (el2) el2.style.visibility = pokeNavOn.value ? 'hidden' : 'visible'
 }
 
 async function doLogout() {

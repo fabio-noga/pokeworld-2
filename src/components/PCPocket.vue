@@ -311,7 +311,7 @@ function openMoveEditor(slot:any,source:'pc'|'team'='team',sourceIndex=-1) {
   const typeMoves:LearnEntry[]=Object.entries(MOVES).filter(([id,m])=>types.includes(m.type)&&!raw.find(e=>e.id===Number(id))).map(([id])=>({id:Number(id),level:0,tag:'type'as const}))
   const knownIds=new Set([...raw.map(e=>e.id),...typeMoves.map(e=>e.id)])
   const legacy:LearnEntry[]=slot.moves.filter((m:any)=>m.id>0&&MOVES[String(m.id)]&&!knownIds.has(m.id)).map((m:any)=>({id:m.id,level:0,tag:'legacy'as const}))
-  const all=[...raw,...typeMoves,...legacy]; const to=(t?:string)=>t==='type'?1:t==='legacy'?2:0
+  const all:LearnEntry[]=[...raw,...typeMoves,...legacy]; const to=(t?:string)=>t==='type'?1:t==='legacy'?2:0
   moveEditor.learnset=[...all.filter(e=>e.level<=slot.lvl&&MOVES[String(e.id)]).sort((a,b)=>b.level-a.level||to(a.tag)-to(b.tag)),...all.filter(e=>e.level>slot.lvl&&MOVES[String(e.id)]).sort((a,b)=>a.level-b.level)]
   const init=[0,0,0,0]; slot.moves.slice(0,4).forEach((m:any,i:number)=>{init[i]=m.id}); moveEditor.active=init; moveEditor.show=true
 }

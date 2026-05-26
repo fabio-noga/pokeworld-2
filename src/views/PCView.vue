@@ -388,12 +388,6 @@ function getTypes(id: number): number[] {
   return s.type1 !== s.type2 ? [s.type1, s.type2] : [s.type2]
 }
 
-function typeColor(id: number): string {
-  return TYPE_COLORS[getPrimaryType(id)] ?? '#888'
-}
-function typeName(id: number): string {
-  return TYPE_NAMES[getPrimaryType(id)] ?? '???'
-}
 
 function xpToNext(lvl: number): number {
   return (lvl + 1) ** 3 - lvl ** 3
@@ -412,8 +406,6 @@ function typeBgH(id: number): string {
   if (s.type1 === s.type2) return c1
   return `linear-gradient(to right, ${c1}, ${c2})`
 }
-// ── Card styles ────────────────────────────────────────────────────
-function cardStyle(_id: number) { return {} }  // type bar handled by card-type-bar div
 
 /**
  * For the left border of team slots.
@@ -510,7 +502,7 @@ function openMoveEditor(slot: typeof saveStore.team[0], source: 'pc' | 'team' = 
     .filter(m => m.id > 0 && MOVES[String(m.id)] && !knownIds.has(m.id))
     .map(m => ({ id: m.id, level: 0, tag: 'legacy' as const }))
 
-  const all = [...raw, ...typeMoves, ...legacyEntries]
+  const all: LearnEntry[] = [...raw, ...typeMoves, ...legacyEntries]
 
   // Unlocked: level ≤ current lvl — learnset moves by level desc, then type/legacy alphabetically
   const unlocked = all
