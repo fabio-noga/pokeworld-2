@@ -1,5 +1,5 @@
 <template>
-  <AppHeader label="ENTRAR" @nav-click="router.push('/game')" />
+  <AppHeader @nav-click="router.push('/game')" />
 
   <main>
     <section id="s1" :style="{ backgroundImage: `url(/wallpapers/${bg}.png)` }"></section>

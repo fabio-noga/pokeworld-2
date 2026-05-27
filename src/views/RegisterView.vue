@@ -48,7 +48,7 @@
       é provável que tenhas posto as informações erradas!)
     </p>
 
-    <AppHeader label="Início" @nav-click="router.push('/')" />
+    <AppHeader @nav-click="router.push('/')" />
   </main>
 </template>
 

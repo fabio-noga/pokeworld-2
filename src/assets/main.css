@@ -88,6 +88,15 @@ body { font-family: sans-serif; }
 .hnav-item span { font-size: 5px; letter-spacing: 0.5px; }
 .hnav-item:hover              { color: #fff; background: rgba(255,255,255,0.08); }
 .hnav-item.router-link-active { color: #fff; }
+.hnav-item.hnav-active        { color: #fff; background: rgba(255,255,255,0.1); }
+
+/* button reset for hnav-item buttons (DEX / PC) */
+button.hnav-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'Press Start 2P', monospace;
+}
 
 /* Pokédex icon — pixel art image instead of FA icon */
 .hnav-dex-img {
@@ -99,7 +108,8 @@ body { font-family: sans-serif; }
   transition: opacity 0.15s;
 }
 .hnav-dex:hover .hnav-dex-img,
-.hnav-dex.router-link-active .hnav-dex-img { opacity: 1; }
+.hnav-dex.router-link-active .hnav-dex-img,
+.hnav-dex.hnav-active .hnav-dex-img { opacity: 1; }
 
 #logout-btn {
   display: flex;
