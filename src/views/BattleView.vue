@@ -879,6 +879,108 @@ main {
 .act-disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 .trainer-slot { cursor: default; pointer-events: none; }
 
+/* ════════════════════════════════════════════════════════════
+   MOBILE REDESIGN — vertical stack layout
+   ════════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* Main becomes a full-width vertical column */
+  main {
+    width: 100%;
+    height: auto;
+    margin: 70px 0 0;
+    display: flex;
+    flex-direction: column;
+    box-shadow: none;
+    position: relative; /* so .pokeball absolute still works inside */
+  }
+
+  /* Arena: full width, 55vw tall (keeps sprites visible) */
+  .monitor {
+    width: 100%;
+    height: 55vw;
+    min-height: 200px;
+    display: block;
+  }
+
+  /* Reposition sprites inside the shrunken arena */
+  #rival       { top: 28%; right: 12%; }
+  #rival > img { width: 100%; }
+  #catch-pos   { top: 28%; right: 12%; }
+  #pokemon     { top: auto; bottom: 68px; left: 6%; }
+  #pokemon > img { width: 140%; }
+
+  /* HUDs: tighter */
+  .enemy-hud  { font-size: 10px; padding: 3px 6px; min-width: 100px; }
+  .player-hud { font-size: 10px; padding: 3px 6px; min-width: 100px; bottom: 68px; }
+  .battle-log { font-size: 11px; height: 54px; }
+
+  /* Catch (pokeball) button: row under arena, full width, shorter */
+  .pokeball {
+    position: relative;
+    top: auto; bottom: auto; left: auto; right: auto;
+    width: 100%;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid #888;
+  }
+  .pokeball > img { width: auto; height: 50px; margin: 0; }
+  .trainer-slot.pokeball > img { width: auto; max-height: 60px; margin: 0; }
+
+  /* Move buttons: full width, 2×2 grid */
+  .tackle {
+    position: relative;
+    bottom: auto; left: auto;
+    width: 100%;
+    height: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    border: none;
+    border-top: 2px solid #333;
+    background: #111;
+  }
+  .Power1, .Power2, .Power3, .Power4 {
+    position: relative;
+    top: auto; bottom: auto; left: auto; right: auto;
+    width: 100%;
+    height: 44px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+  .Power1 > h2, .Power2 > h2, .Power3 > h2, .Power4 > h2 { font-size: 12px; margin: 6px 0; }
+
+  /* Team slots: horizontal strip */
+  .pokemons {
+    position: relative;
+    bottom: auto; right: auto;
+    width: 100%;
+    height: auto;
+    display: flex;
+    flex-direction: row;
+    text-align: center;
+    border-top: 2px solid #555;
+  }
+  .pokemons > div {
+    flex: 1;
+    width: auto;
+    height: 40px;
+    font-size: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border-bottom: none;
+    border-left: 1px solid #888;
+    overflow: hidden;
+  }
+  .pokemons > div:first-child { border-left: none; }
+  .pokemons > div p { margin: 0; line-height: 1.2; font-size: 9px; }
+}
+
 /* ── Trainer / Pokémon entrance & exit animations ── */
 .rival-trainer-img { width: 150%; display: block; }
 

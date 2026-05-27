@@ -1,7 +1,13 @@
 <template>
   <main>
+    <!-- Mobile tab bar -->
+    <div class="mob-tabs">
+      <button :class="{ active: tab === 'login' }" @click="tab = 'login'">Login</button>
+      <button :class="{ active: tab === 'register' }" @click="tab = 'register'">Registar</button>
+    </div>
+
     <!-- Login -->
-    <div class="Log">
+    <div class="Log" :class="{ 'mob-hidden': tab !== 'login' }">
       <h1>Login</h1><br />
       <input v-model="loginName" type="text" placeholder="Nome" class="form-control" /><br />
       <input v-model="loginPass" type="password" placeholder="Password" class="form-control" /><br />
@@ -10,10 +16,9 @@
     </div>
 
     <div class="divider"></div>
-    <hr class="hr" />
 
     <!-- Register -->
-    <div class="Reg">
+    <div class="Reg" :class="{ 'mob-hidden': tab !== 'register' }">
       <h1>Registar</h1><br />
       <input v-model="regName" type="text" placeholder="Nome" class="form-control" /><br />
       <input v-model="regPass" type="password" placeholder="Password" class="form-control" /><br />
@@ -62,6 +67,8 @@ import { useSaveStore } from '../stores/save'
 const router = useRouter()
 const authStore = useAuthStore()
 const saveStore = useSaveStore()
+
+const tab = ref<'login' | 'register'>('login')
 
 const loginName = ref('')
 const loginPass = ref('')
@@ -121,7 +128,7 @@ watch(() => authStore.isLoggedIn, (v) => { if (v) router.push('/game') }, { imme
 <style scoped>
 main {
   margin: 0 10%;
-  min-width: 500px;
+  min-width: 0;
   background-color: #e6e6e6;
   box-shadow: 0 0 10px #888;
   margin-top: 150px;
@@ -157,7 +164,6 @@ main {
 .player2 > div > img { width: 100%; max-width: 133px; }
 .player2 > div > img:hover { border: 1px solid #66afe9; }
 .divider { border-left: 1px solid #000; height: 640px; width: 0; margin: 20px 0; }
-.hr { display: none; }
 .info { text-align: center; color: grey; width: 100%; padding: 10px; }
 .err { color: red; margin-top: 8px; font-size: 0.9rem; }
 button {
@@ -185,9 +191,59 @@ button:hover { background: #cc0000; }
 }
 .guest-btn:hover { background: #f0f0f0; border-color: #aaa; }
 
-@media screen and (max-width: 830px) {
+/* ── Mobile tab bar — hidden on desktop ─────────────────── */
+.mob-tabs { display: none; }
+
+@media screen and (max-width: 600px) {
+  main {
+    margin: 80px 0 0;
+    box-shadow: none;
+    flex-direction: column;
+    padding: 0 0 20px;
+  }
+
+  /* Tab bar */
+  .mob-tabs {
+    display: flex;
+    width: 100%;
+    border-bottom: 2px solid #cc0000;
+    margin-bottom: 12px;
+  }
+  .mob-tabs button {
+    flex: 1;
+    padding: 12px;
+    background: #e6e6e6;
+    color: #333;
+    border: none;
+    border-radius: 0;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .mob-tabs button.active {
+    background: #cc0000;
+    color: #fff;
+  }
+  .mob-tabs button:hover:not(.active) { background: #d5d5d5; }
+
+  /* Hide inactive panel */
+  .mob-hidden { display: none !important; }
+
+  /* Collapse sections to full width */
+  .Log, .Reg {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0 16px;
+  }
   .divider { display: none; }
-  .hr { display: block; width: 100%; }
+  .form-control { width: 100%; }
+  .guest-wrap { padding: 16px 16px 0; }
+}
+
+@media screen and (max-width: 830px) and (min-width: 601px) {
+  .divider { display: none; }
   main { margin-top: 100px; }
 }
 </style>

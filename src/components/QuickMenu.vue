@@ -43,9 +43,7 @@ const modalStore = useModalStore()
 const open = ref(false)
 
 function pick(which: 'pc' | 'dex') {
-  console.log('[QM] pick', which, '— pocketOpen before:', modalStore.pocketOpen)
   modalStore.togglePocket(which)
-  console.log('[QM] pocketOpen after:', modalStore.pocketOpen)
   open.value = false
 }
 function pickPad() {

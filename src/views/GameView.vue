@@ -566,9 +566,11 @@ function triggerEncounter(num: number) {
   tracker.img = `/textures/Art/${padId(num)}.png`
   tracker.visible = true
   tracker.shiny = isShiny
+  saveStore.encounter.isTrainer   = false
+  saveStore.encounter.trainerTeam = []
   saveStore.encounter.number = num
-  saveStore.encounter.level = lvl
-  saveStore.encounter.shiny = isShiny
+  saveStore.encounter.level  = lvl
+  saveStore.encounter.shiny  = isShiny
   const id = String(num)
   if (saveStore.pokedex[id] !== 'caught') saveStore.pokedex[id] = 'seen'
   if (isShiny && saveStore.shinydex[id] !== 'caught') saveStore.shinydex[id] = 'seen'
@@ -1480,7 +1482,7 @@ onUnmounted(() => {
 .tdbg-6 { background: rgba(220, 160,   0,  0.45); }  /* fence   — amber */
 .tdbg-9 { background: rgba(0,   200, 160,  0.55); }  /* fishing — teal  */
 
-/* Mobile */
+/* Mobile — medium (tablet / large phone) */
 @media screen and (max-width: 980px) {
   #pad-toggle { bottom: 8px; right: 8px; }
   #TrackerBush {
@@ -1490,5 +1492,30 @@ onUnmounted(() => {
     transform: translateX(-50%);
   }
   /* #PlayerTracker and #PlayerStats already hidden globally */
+}
+
+/* Mobile — small phone */
+@media screen and (max-width: 500px) {
+  /* Party panel: cap to viewport width */
+  .slots-panel { right: 4px; bottom: 4px; }
+  .slots { width: calc(100vw - 8px); gap: 3px; }
+
+  /* Smaller cards */
+  .slot-entry { padding: 4px 6px 4px 6px; gap: 4px; }
+  .slot-sprite { width: 36px; height: 36px; }
+  .slot-ball  { width: 16px; height: 16px; }
+  .slot-name-text { font-size: 5px; }
+  .slot-lv   { font-size: 5px; }
+  .slot-lv b { font-size: 4px; }
+
+  /* Right column offset — smaller on tiny screens */
+  .slots > .slot-outer:nth-child(even) { transform: translateY(-4px); }
+
+  /* TrackerBush: full width, leave only joystick gap */
+  #TrackerBush {
+    width: calc(100vw - 140px);
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
 </style>
