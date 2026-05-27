@@ -12,7 +12,7 @@
                src="/textures/HUD/Pokeball.png" class="hud-ball" title="Normal caught" />
           <img v-if="saveStore.shinydex[String(rivalNum)] === 'caught'"
                src="/textures/HUD/Pokeball.png" class="hud-ball hud-ball--shiny" title="Shiny caught" />
-          <span class="hud-lv">Lv.{{ encounter.level }}</span>
+          <span class="hud-lv">Lv.{{ enemyLevel }}</span>
         </div>
         <div class="hp-bar-wrap"><div class="hp-bar" :style="enemyHpStyle"></div></div>
         <div class="hud-hp">{{ enemyHP }}/{{ enemyMaxHP }}</div>
@@ -60,10 +60,10 @@
 
     <!-- Pokéball (catch button) or Trainer slider -->
     <div class="pokeball"
-         @click="encounter.isTrainer ? undefined : onCatch()"
+         @click="(encounter.isTrainer || isMissingNo) ? undefined : onCatch()"
          :class="{
-           'act-disabled': !encounter.isTrainer && (!canAct || battleOver || captureSuccess || forcedSwitch),
-           'trainer-slot': encounter.isTrainer,
+           'act-disabled': (!encounter.isTrainer && !isMissingNo) && (!canAct || battleOver || captureSuccess || forcedSwitch),
+           'trainer-slot': encounter.isTrainer || isMissingNo,
          }">
       <img :src="encounter.isTrainer ? encounter.trainerSlider : '/textures/HUD/Pokeball.png'" alt=""
            :style="encounter.isTrainer ? { width: '150px', margin: '25px', objectFit: 'contain' } : {}" />
@@ -197,11 +197,19 @@ const trainerSrc = computed(() =>
   trainerIsOutro.value ? encounter.trainerStill : encounter.trainerPortrait
 )
 
+// ── MissingNo. Easter egg ─────────────────────────────────────────
+// Triggered when navigating directly to /battle with no encounter set.
+// 1 in 5 chance. Uses m1.gif / m1.png sprites, level 80-99.
+const isMissingNo    = ref(false)
+const missingNoLevel = ref(0)
+const MISSINGNO_STATS = { hp: 33, atk: 136, def: 0, spa: 136, spd: 0, spe: 0, type1: 0, type2: 0 }
+
 // ── Sprites ───────────────────────────────────────────────────────
-const rivalNum = computed(() => encounter.number > 0 ? encounter.number : 25)
+const rivalNum = computed(() => encounter.number > 0 ? encounter.number : 0)
 const isEnemyShiny = computed(() => encounter.shiny)
 const isPlayerShiny = computed(() => active.value?.shiny ?? false)
 const rivalSprite = computed(() => {
+  if (isMissingNo.value) return '/textures/Battle/Normal/Front/Gif/m1.gif'
   const variant = isEnemyShiny.value ? 'Shiny' : 'Normal'
   return `/textures/Battle/${variant}/Front/Gif/${padId(rivalNum.value)}.gif`
 })
@@ -211,15 +219,19 @@ const playerPokemonSprite = computed(() => {
 })
 
 // ── Names / levels ────────────────────────────────────────────────
-const enemyName = computed(() => pokedex(rivalNum.value))
+const enemyName = computed(() => isMissingNo.value ? 'MissingNo.' : pokedex(rivalNum.value))
+const enemyLevel = computed(() => isMissingNo.value ? missingNoLevel.value : encounter.level)
 const playerName = computed(() => pokedex(active.value?.id ?? 1))
-const playerLvl = computed(() => active.value?.lvl ?? 1)
+const playerLvl  = computed(() => active.value?.lvl ?? 1)
 
 // ── HP ────────────────────────────────────────────────────────────
 function calcMaxHP(baseHP: number, level: number): number {
   return Math.floor(2 * baseHP * level / 100) + level + 10
 }
-const enemyMaxHP = computed(() => calcMaxHP(STATS[String(rivalNum.value)]?.hp ?? 45, encounter.level))
+const enemyMaxHP = computed(() => {
+  if (isMissingNo.value) return calcMaxHP(MISSINGNO_STATS.hp, missingNoLevel.value)
+  return calcMaxHP(STATS[String(rivalNum.value)]?.hp ?? 45, encounter.level)
+})
 const playerMaxHP = computed(() => calcMaxHP(STATS[String(active.value?.id ?? 1)]?.hp ?? 45, active.value?.lvl ?? 7))
 const enemyHP = ref(0)
 const playerHP = ref(0)
@@ -270,7 +282,7 @@ function pickEnemyMoves() {
   const learnset = LEARNSETS[String(rivalNum.value)] ?? []
   // All moves learnable at or below the wild Pokémon's level
   const learnable = learnset
-    .filter(e => e.level <= encounter.level && MOVES[String(e.id)]?.power > 0)
+    .filter(e => e.level <= enemyLevel.value && MOVES[String(e.id)]?.power > 0)
     .sort((a, b) => b.level - a.level) // highest-level (strongest) first
   // Pick up to 4 best moves; fall back to random damaging moves if learnset is sparse
   const chosen = learnable.slice(0, 4)
@@ -337,13 +349,13 @@ function enemyTurn() {
     move.pp--
     if (move.entry.power > 0) {
       if (Math.random() * 100 < move.entry.acc) {
-        const eSt = STATS[String(rivalNum.value)]
+        const eSt = isMissingNo.value ? MISSINGNO_STATS : STATS[String(rivalNum.value)]
         const pSt = STATS[String(active.value?.id ?? 1)]
         const isPhys = PHYSICAL_TYPES.has(move.entry.type)
         const atkStat = isPhys ? (eSt?.atk ?? 50) : (eSt?.spa ?? 50)
         const defStat = isPhys ? (pSt?.def ?? 50) : (pSt?.spd ?? 50)
         const result = calcDamage(
-          atkStat, defStat, move.entry.power, encounter.level,
+          atkStat, defStat, move.entry.power, enemyLevel.value,
           move.entry.type,
           eSt?.type1 ?? 1, eSt?.type2 ?? 1,
           pSt?.type1 ?? 1, pSt?.type2 ?? 1,
@@ -497,7 +509,7 @@ async function onMove(i: number) {
   if (move.power > 0) {
     if (Math.random() * 100 < move.acc) {
       const pSt = STATS[String(active.value?.id ?? 1)]
-      const eSt = STATS[String(rivalNum.value)]
+      const eSt = isMissingNo.value ? MISSINGNO_STATS : STATS[String(rivalNum.value)]
       const isPhys = PHYSICAL_TYPES.has(move.type)
       const atkStat = isPhys ? (pSt?.atk ?? 50) : (pSt?.spa ?? 50)
       const defStat = isPhys ? (eSt?.def ?? 50) : (eSt?.spd ?? 50)
@@ -520,7 +532,7 @@ async function onMove(i: number) {
 
   if (enemyHP.value <= 0) {
     if (active.value) active.value.hp = playerHP.value
-    const xpBase = Math.floor(encounter.level * 5 + Math.random() * 20)
+    const xpBase = Math.floor(enemyLevel.value * 5 + Math.random() * 20)
     awardXp(xpBase)
 
     // HP bar drains (300ms transition), then faint animation
@@ -628,7 +640,7 @@ async function onCatch() {
     } else {
       saveStore.pokedex[dexId] = 'caught'
     }
-    const catchXp = Math.floor(encounter.level * 5 + Math.random() * 20)
+    const catchXp = Math.floor(enemyLevel.value * 5 + Math.random() * 20)
     awardXp(catchXp)
     const caught = {
       id: rivalNum.value,
@@ -692,6 +704,26 @@ onMounted(async () => {
     log('All your Pokémon have fainted! Visit the Health Center to recover.')
     return
   }
+
+  // ── No valid encounter (e.g. direct page reload) ──────────────────
+  if (encounter.number <= 0 && !encounter.isTrainer) {
+    if (Math.random() < 1 / 5) {
+      // MissingNo. appears!
+      isMissingNo.value    = true
+      missingNoLevel.value = Math.floor(Math.random() * 20) + 80
+      enemyHP.value   = enemyMaxHP.value   // reactive — uses missingNoLevel
+      playerHP.value  = active.value?.hp ?? playerMaxHP.value
+      pickEnemyMoves()
+      loadPlayerMoves()
+      pokemonVisible.value = true
+      log('A wild MissingNo. appeared!!')
+      setTimeout(() => { canAct.value = true }, 600)
+    } else {
+      router.push('/game')
+    }
+    return
+  }
+
   enemyHP.value = enemyMaxHP.value
   playerHP.value = active.value?.hp ?? playerMaxHP.value
   pickEnemyMoves()
