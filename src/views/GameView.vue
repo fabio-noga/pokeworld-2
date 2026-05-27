@@ -182,7 +182,7 @@
   <!-- Fishing spot indicator -->
   <Transition name="water-hud">
     <div v-if="tileArray[playerTileRef] === 9" class="water-hud fishing-hud">
-      <span class="water-hud-icon">🎣</span>
+      <img src="/textures/Items/27.png" class="water-hud-icon fishing-rod-icon" alt="🎣" />
       <span class="water-hud-lbl fishing-lbl">
         fishing<span class="fishing-dots">{{ '.'.repeat(fishingDots) }}</span>
       </span>
@@ -196,6 +196,27 @@
     @close="inspectedSlot = null"
     @evolve="evolveInspectedSlot"
   />
+
+  <!-- Mobile party strip — circular icons with HP ring (left side) -->
+  <div class="mob-party">
+    <div
+      v-for="slot in saveStore.team.filter(s => s.id > 0)"
+      :key="slot.id"
+      class="mob-poke-wrap"
+      :style="{
+        '--ring-pct': (hpPercent(slot) * 360) + 'deg',
+        '--ring-color': hpColor(hpPercent(slot)),
+      }"
+      @click="openSlotInfo(slot, saveStore.team.indexOf(slot))"
+    >
+      <div class="mob-poke-ring">
+        <div class="mob-poke-inner">
+          <img :src="slotImg(slot)" alt="" class="mob-poke-img" />
+          <span v-if="slot.pendingEvo" class="mob-evo">↑</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Quick menu (DEX / PC / D-PAD) — below #PlayerStats -->
   <QuickMenu :pad-active="padVisible" @toggle-dpad="togglePad" />
@@ -1428,6 +1449,7 @@ onUnmounted(() => {
   pointer-events: none;
 }
 .water-hud-icon { font-size: 14px; }
+.fishing-rod-icon { width: 18px; height: 18px; image-rendering: pixelated; }
 .water-hud-lbl {
   font-family: 'Press Start 2P', monospace;
   font-size: 7px;
@@ -1494,28 +1516,81 @@ onUnmounted(() => {
   /* #PlayerTracker and #PlayerStats already hidden globally */
 }
 
+/* ── Mobile party strip ─────────────────────────────────────────── */
+.mob-party {
+  display: none; /* shown only on mobile via media query */
+}
+
 /* Mobile — small phone */
+@media screen and (max-width: 600px) {
+  /* Hide desktop party panel */
+  .slots-panel { display: none !important; }
+
+  /* Show mobile party strip */
+  .mob-party {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: fixed;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 400;
+  }
+
+  .mob-poke-wrap {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    /* Conic-gradient HP ring */
+    background: conic-gradient(
+      var(--ring-color) var(--ring-pct),
+      rgba(0, 0, 0, 0.55) 0deg
+    );
+    padding: 4px;
+    cursor: pointer;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+    transition: filter 0.15s;
+  }
+  .mob-poke-wrap:active { filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4)) brightness(0.85); }
+
+  .mob-poke-ring {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(20, 45, 20, 0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .mob-poke-img {
+    width: 36px;
+    height: 36px;
+    image-rendering: pixelated;
+    object-fit: contain;
+  }
+
+  .mob-evo {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    font-size: 9px;
+    color: #c084fc;
+    text-shadow: 0 0 4px #fff;
+    line-height: 1;
+  }
+}
+
+/* Mobile — TrackerBush: narrower to avoid joystick overlap */
 @media screen and (max-width: 500px) {
-  /* Party panel: cap to viewport width */
-  .slots-panel { right: 4px; bottom: 4px; }
-  .slots { width: calc(100vw - 8px); gap: 3px; }
-
-  /* Smaller cards */
-  .slot-entry { padding: 4px 6px 4px 6px; gap: 4px; }
-  .slot-sprite { width: 36px; height: 36px; }
-  .slot-ball  { width: 16px; height: 16px; }
-  .slot-name-text { font-size: 5px; }
-  .slot-lv   { font-size: 5px; }
-  .slot-lv b { font-size: 4px; }
-
-  /* Right column offset — smaller on tiny screens */
-  .slots > .slot-outer:nth-child(even) { transform: translateY(-4px); }
-
-  /* TrackerBush: full width, leave only joystick gap */
   #TrackerBush {
-    width: calc(100vw - 140px);
+    width: calc(100vw - 150px);
     left: 50%;
     transform: translateX(-50%);
+    min-width: 0;
   }
 }
 </style>

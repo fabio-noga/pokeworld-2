@@ -2,15 +2,22 @@
   <AppHeader @navClick="doLogout" />
 
   <div class="dex-page">
+    <!-- Mobile list toggle — floating left tab, only on mobile -->
+    <button class="mob-list-tab" @click="listOpen = !listOpen" :aria-label="listOpen ? 'Close list' : 'Open Pokédex list'">
+      {{ listOpen ? '◀' : '▶' }}
+    </button>
+
+    <!-- Mobile backdrop — tap outside to close list -->
+    <div v-if="listOpen" class="mob-list-backdrop" @click="listOpen = false"></div>
+
     <div class="dex-wrap">
       <div class="bento-grid">
 
         <!-- ① LIST  — col 1-2 · row 1-9 -->
-        <div class="bento-cell cell-list">
+        <div class="bento-cell cell-list" :class="{ 'list-open': listOpen }">
           <div class="list-head">
             <div class="list-title-row">
-              <span class="list-title">POKÉDEX</span>
-              <button class="tpe-btn" :class="{ active: tpeMode }" @click="tpeMode = !tpeMode" title="True Player Experience">
+<button class="tpe-btn" :class="{ active: tpeMode }" @click="tpeMode = !tpeMode" title="True Player Experience">
                 <i class="fa-solid fa-eye"></i>
               </button>
             </div>
@@ -37,7 +44,7 @@
               role="option" :aria-selected="selectedId === i"
               @click="selectPokemon(i)"
             >
-              <img :src="`/textures/Mini/Png/${padId(i)}.png`" :alt="pokedex(i)" width="20" height="20" loading="lazy"
+              <img :src="`/textures/Mini/Png/${padId(i)}.png`" :alt="pokedex(i)" width="28" height="28" loading="lazy"
                    :class="{ 'sprite-unknown': !isKnown(i) }" />
               <span class="li-num">#{{ padId(i) }}</span>
               <span class="li-name">{{ isKnown(i) ? pokedex(i) : '???' }}</span>
@@ -47,6 +54,18 @@
                 <span v-if="saveStore.shinydex[String(i)] === 'caught'" class="li-dot dot-shiny-caught">✨</span>
                 <span v-else-if="saveStore.shinydex[String(i)] === 'seen'" class="li-dot dot-shiny-seen">✨</span>
               </template>
+            </div>
+
+            <!-- MissingNo — only if caught -->
+            <div v-if="saveStore.pokedex['0'] === 'caught'"
+              class="list-item list-item--missingno"
+              :class="{ active: selectedId === 0 }"
+              @click="selectPokemon(0)"
+            >
+              <img src="/textures/Battle/Normal/Front/Gif/m1.gif" alt="MissingNo." width="28" height="28" />
+              <span class="li-num" style="color:#8040c0">#???</span>
+              <span class="li-name" style="color:#8040c0">MissingNo.</span>
+              <span class="li-dot dot-caught">●</span>
             </div>
           </div>
         </div>
@@ -74,7 +93,7 @@
         <!-- ③ TITLE / HERO  — col 4-6 · row 1 -->
         <div class="bento-cell cell-hero" :style="selectedKnown ? heroStyle : {}">
           <img class="hero-gif"
-               :src="`/textures/Mini/Gif/${padId(selectedId)}.gif`"
+               :src="selectedId === 0 ? '/textures/Battle/Normal/Front/Gif/m1.gif' : `/textures/Mini/Gif/${padId(selectedId)}.gif`"
                alt="" width="48" height="48"
                :class="{ 'sprite-unknown': !selectedKnown }" />
           <div class="hero-info">
@@ -133,7 +152,7 @@
                   <div class="art-tv-content" :key="selectedId">
                     <template v-if="selectedKnown">
                       <img class="art-img"
-                           :src="`/textures/Art/${padId(selectedId)}.png`"
+                           :src="selectedId === 0 ? '/textures/Battle/Normal/Front/Gif/m1.gif' : `/textures/Art/${padId(selectedId)}.png`"
                            :alt="selectedName"
                            width="300" height="300" />
                       <template v-if="pokemonDescription">
@@ -340,6 +359,9 @@ const router    = useRouter()
 const authStore = useAuthStore()
 const saveStore = useSaveStore()
 
+// ── Mobile list drawer ───────────────────────────────────────────────
+const listOpen = ref(false)
+
 // ── Type constants ───────────────────────────────────────────────────
 const TYPE_COLORS: Record<number, string> = {
   1:  '#7a7a5a', 2:  '#d85020', 3:  '#982018', 4:  '#3a5ab8',
@@ -360,8 +382,8 @@ function isKnown(id: number): boolean {
   if (!tpeMode.value) return true
   return !!saveStore.pokedex[String(id)]
 }
-const selectedKnown  = computed(() => isKnown(selectedId.value))
-const selectedCaught = computed(() => !tpeMode.value || saveStore.pokedex[String(selectedId.value)] === 'caught')
+const selectedKnown  = computed(() => selectedId.value === 0 ? true : isKnown(selectedId.value))
+const selectedCaught = computed(() => selectedId.value === 0 ? true : (!tpeMode.value || saveStore.pokedex[String(selectedId.value)] === 'caught'))
 
 // ── TV power ─────────────────────────────────────────────────────────
 const tvOn         = ref(true)
@@ -380,11 +402,16 @@ function matchesSearch(id: number): boolean {
 }
 
 // ── Selected Pokémon ─────────────────────────────────────────────────
-const selectedId   = computed(() => { const n = Number(route.query.id); return n >= 1 && n <= 151 ? n : 1 })
-const selectedName = computed(() => pokedex(selectedId.value))
+const selectedId   = computed(() => {
+  const n = Number(route.query.id)
+  if (n === 0 && saveStore.pokedex['0'] === 'caught') return 0
+  return n >= 1 && n <= 151 ? n : 1
+})
+const selectedName = computed(() => selectedId.value === 0 ? 'MissingNo.' : pokedex(selectedId.value))
 
 function selectPokemon(id: number) {
   router.push({ path: '/pokedex', query: { id } })
+  listOpen.value = false  // close drawer on mobile after selecting
 }
 async function doLogout() {
   await authStore.logout()
@@ -646,7 +673,7 @@ onMounted(() => {
 }
 .list-item:hover  { background: #e8f4fc; }
 .list-item.active { background: #fff4f4; border-left: 3px solid #c82020; padding-left: 5px; }
-.list-item img { image-rendering: pixelated; flex-shrink: 0; }
+.list-item img { image-rendering: pixelated; flex-shrink: 0; width: 28px; height: 28px; }
 .li-num  { font-family: 'VT323', monospace; font-size: 12px; color: #6080a0; min-width: 28px; flex-shrink: 0; }
 .li-name { font-family: 'VT323', monospace; font-size: 14px; color: #181830; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .li-dot  { font-size: 9px; flex-shrink: 0; }
@@ -1302,19 +1329,92 @@ onMounted(() => {
   .cell-learnset { grid-column: 1 / 6; grid-row: 6; }
 }
 
+/* ── Mobile: list becomes a slide-in drawer from the left ── */
+.mob-list-tab {
+  display: none;
+}
+.mob-list-backdrop {
+  display: none;
+}
+
 @media (max-width: 600px) {
+  /* Floating tab to open the list */
+  .mob-list-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 300;
+    width: 28px;
+    height: 56px;
+    background: #2848a8;
+    color: #fff;
+    border: none;
+    border-radius: 0 8px 8px 0;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.3);
+    transition: background 0.15s;
+  }
+  .mob-list-tab:hover { background: #1a3080; }
+
+  /* Semi-transparent backdrop */
+  .mob-list-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 310;
+  }
+
+  /* The list panel itself — hidden off-screen by default */
+  .cell-list {
+    position: fixed !important;
+    left: -260px;
+    top: 70px;
+    bottom: 0;
+    width: 240px !important;
+    height: calc(100dvh - 70px) !important;
+    max-height: none !important;
+    z-index: 320;
+    border-radius: 0 8px 8px 0;
+    transition: left 0.25s ease;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .cell-list.list-open {
+    left: 0;
+  }
+  .cell-list .list-head,
+  .cell-list .list-search-bar {
+    flex-shrink: 0;
+  }
+  /* Scroll area fills rest of panel, bottom-anchored */
+  .cell-list .list-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: scroll;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Bento grid: full width, 2 cols, no list columns */
   .bento-grid {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: none;
   }
-  .cell-list     { grid-column: 1 / 3; grid-row: 1; max-height: 200px; }
-  .cell-prev     { grid-column: 1;     grid-row: 2; }
-  .cell-next     { grid-column: 2;     grid-row: 2; }
-  .cell-hero     { grid-column: 1 / 3; grid-row: 3; }
-  .cell-art      { grid-column: 1 / 3; grid-row: 4; }
-  .cell-stats    { grid-column: 1 / 3; grid-row: 5; }
-  .cell-evo      { grid-column: 1 / 3; grid-row: 6; }
-  .cell-learnset { grid-column: 1 / 3; grid-row: 7; }
+  .cell-prev     { grid-column: 1;     grid-row: 1; }
+  .cell-next     { grid-column: 2;     grid-row: 1; }
+  .cell-hero     { grid-column: 1 / 3; grid-row: 2; }
+  .cell-art      { grid-column: 1 / 3; grid-row: 3; }
+  .cell-stats    { grid-column: 1 / 3; grid-row: 4; }
+  .cell-evo      { grid-column: 1 / 3; grid-row: 5; }
+  .cell-learnset { grid-column: 1 / 3; grid-row: 6; }
 
   .hero-name { font-size: 17px; }
   .lt-head, .lt-row { grid-template-columns: 36px 1fr 68px 44px 36px 44px; padding: 0 8px; }

@@ -1,6 +1,13 @@
 <template>
   <AppHeader @navClick="doLogout" />
 
+  <!-- Mobile: floating tab to open party drawer -->
+  <button class="mob-party-tab" @click="partyOpen = true" aria-label="Open Party">
+    PARTY
+  </button>
+  <!-- Mobile backdrop: tap outside closes drawer -->
+  <div v-if="partyOpen" class="mob-party-backdrop" @click="partyOpen = false"></div>
+
   <main>
     <div class="pc-wrap">
 
@@ -32,6 +39,7 @@
                   draggable="true"
                   @dragstart="onDragStart('pc', cell - 1)"
                   @dragend="dragSrc = ''; dragOver = ''"
+                  @click.stop="openMobSwap(cell - 1)"
                 >
                   <div class="card-type-bar" :style="{ background: typeBgH(saveStore.pc[cell - 1].id) }"></div>
                   <button class="gear-btn gear-btn-card" @click.stop="openMoveEditor(saveStore.pc[cell - 1], 'pc', cell - 1)" title="Manage"><i class="fa-solid fa-gear"></i></button>
@@ -81,9 +89,10 @@
           </div>
         </div>
 
-        <!-- Team Panel -->
-        <div class="team-panel">
+        <!-- Team Panel (mobile: slide-in left drawer) -->
+        <div class="team-panel" :class="{ 'party-open': partyOpen }">
           <div class="team-header">
+            <button class="mob-party-close" @click="partyOpen = false" aria-label="Close">✕</button>
             <span>PARTY</span>
             <button class="heal-all-btn" @click="healAll" title="Heal All">♥ HEAL</button>
           </div>
@@ -169,8 +178,11 @@
       </div>
 
       <!-- Tip -->
-      <div class="pc-tip">
+      <div class="pc-tip pc-tip-desktop">
         <span class="blink-slow">▶</span> DRAG Pokémon to move between PC and Party
+      </div>
+      <div class="pc-tip pc-tip-mobile">
+        <span class="blink-slow">▶</span> TAP a Pokémon to move it to your party
       </div>
     </div>
 
@@ -297,6 +309,30 @@
         </div>
       </div>
     </div>
+
+    <!-- Mobile: move-to-party slot picker -->
+    <div v-if="mobSwap.show" class="modal-overlay" @click.self="mobSwap.show = false">
+      <div class="modal-box mob-swap-modal">
+        <div class="mob-swap-title">
+          Move <b>{{ pokedex(saveStore.pc[mobSwap.pcIdx]?.id ?? 0) }}</b> to party slot:
+        </div>
+        <div class="mob-swap-slots">
+          <button
+            v-for="(slot, i) in saveStore.team"
+            :key="i"
+            class="mob-swap-slot"
+            :class="{ 'swap-occupied': slot.id > 0, 'swap-empty': !slot.id }"
+            @click="mobMoveToSlot(i)"
+          >
+            <img v-if="slot.id" :src="`/textures/Mini/Png/${padId(slot.id)}.png`" alt="" class="mob-swap-img" />
+            <span v-else class="mob-swap-empty-icon">○</span>
+            <span class="mob-swap-name">{{ slot.id ? (slot.nickname || pokedex(slot.id)) : 'EMPTY' }}</span>
+            <span class="mob-swap-lv">{{ slot.id ? `Lv.${slot.lvl}` : '' }}</span>
+          </button>
+        </div>
+        <button class="modal-btn modal-cancel mob-swap-cancel" @click="mobSwap.show = false">CANCEL</button>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -321,6 +357,9 @@ const LEARNSETS_DATA = learnsetsData as Record<string, { id: number; level: numb
 const router = useRouter()
 const authStore = useAuthStore()
 const saveStore = useSaveStore()
+
+// ── Mobile party drawer ───────────────────────────────────────────
+const partyOpen = ref(false)
 
 async function doLogout() {
   await authStore.logout()
@@ -350,6 +389,34 @@ const dragSrc = ref('')
 const dragOver = ref('')
 
 const activeTeam = computed(() => saveStore.team.filter(s => s.id > 0))
+
+// ── Mobile: tap-to-move (replaces drag on touch screens) ──────────
+const mobSwap = reactive({ show: false, pcIdx: -1 })
+
+function openMobSwap(pcIdx: number) {
+  if (typeof window !== 'undefined' && window.innerWidth > 700) return // desktop: let drag handle it
+  if (!saveStore.pc[pcIdx]?.id) return
+  mobSwap.pcIdx = pcIdx
+  mobSwap.show  = true
+}
+
+function mobMoveToSlot(teamIdx: number) {
+  const pcIdx  = mobSwap.pcIdx
+  mobSwap.show = false
+  const fromPC   = { ...saveStore.pc[pcIdx] }
+  const fromTeam = saveStore.team[teamIdx] ? { ...saveStore.team[teamIdx] } : null
+  if (fromTeam?.id) {
+    // swap: team slot goes to PC, PC goes to team
+    saveStore.team[teamIdx] = { ...fromPC,   slot: teamIdx + 1 }
+    saveStore.pc[pcIdx]     = { ...fromTeam, slot: pcIdx   + 1 }
+  } else {
+    // empty slot: just move there
+    saveStore.team[teamIdx] = { ...fromPC, slot: teamIdx + 1 }
+    saveStore.pc[pcIdx]     = { id: 0, lvl: 0, hp: 0, xp: 0, moves: [], slot: pcIdx + 1 }
+    while (saveStore.pc.length && !saveStore.pc[saveStore.pc.length - 1]?.id) saveStore.pc.pop()
+  }
+  saveStore.save()
+}
 
 // ── Type mapping (decoded from classic/pokemon.sql) ────────────────
 const TYPE_COLORS: Record<number, string> = {
@@ -1643,8 +1710,121 @@ main {
 /* ── Responsive ── */
 @media screen and (max-width: 700px) {
   .pc-layout { flex-direction: column; }
-  .team-panel { width: 100%; }
   .box-grid { grid-template-columns: repeat(4, 1fr); }
   .pc-title { font-size: 12px; }
+  .pc-tip-desktop { display: none; }
+
+  /* Party panel becomes a fixed left drawer */
+  .team-panel {
+    position: fixed !important;
+    left: -260px;
+    top: 70px;
+    bottom: 0;
+    width: 240px !important;
+    z-index: 320;
+    transition: left 0.25s ease;
+    overflow-y: scroll;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    border-radius: 0 4px 4px 0;
+    box-shadow: 4px 0 12px rgba(0,0,0,0.25);
+  }
+  .team-panel.party-open { left: 0; }
+
+  /* Floating tab button */
+  .mob-party-tab {
+    display: flex;
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 319;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    background: #2a9030;
+    color: #fff;
+    border: 2px solid #1a6020;
+    border-left: none;
+    border-radius: 0 4px 4px 0;
+    padding: 14px 9px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    box-shadow: 2px 2px 0 #1a6020;
+  }
+
+  /* Backdrop */
+  .mob-party-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 318;
+  }
+
+  /* Close button inside drawer header */
+  .mob-party-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 2px;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+  }
 }
+
+@media screen and (min-width: 701px) {
+  .pc-tip-mobile { display: none; }
+  .mob-party-tab { display: none; }
+  .mob-party-backdrop { display: none; }
+  .mob-party-close { display: none; }
+}
+
+/* ── Mobile swap modal ─────────────────────────────────────────── */
+.mob-swap-modal {
+  max-width: 340px;
+  padding: 20px;
+}
+.mob-swap-title {
+  font-size: 13px;
+  margin-bottom: 14px;
+  text-align: center;
+  color: #1a3080;
+}
+.mob-swap-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.mob-swap-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 2px solid #2848a8;
+  border-radius: 6px;
+  background: #f0f8ff;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.1s;
+}
+.mob-swap-slot:hover, .mob-swap-slot:active { background: #ddeeff; }
+.mob-swap-img { width: 32px; height: 32px; image-rendering: pixelated; }
+.mob-swap-empty-icon { width: 32px; text-align: center; font-size: 20px; color: #aaa; }
+.mob-swap-name { flex: 1; font-weight: bold; font-size: 13px; color: #1a3080; }
+.mob-swap-lv { font-size: 11px; color: #666; }
+.swap-empty { opacity: 0.6; }
+.mob-swap-cancel { width: 100%; margin-top: 4px; }
 </style>

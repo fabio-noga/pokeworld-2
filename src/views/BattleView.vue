@@ -1,4 +1,5 @@
 <template>
+  <div class="battle-page">
   <main>
     <!-- Arena -->
     <div class="monitor" :style="{ backgroundImage: `url(/textures/Battle/Arena/background${arenaNum}.png)` }">
@@ -43,7 +44,7 @@
 
       <!-- Catch ball — separate div so #rival > img width doesn't apply -->
       <div id="catch-pos" v-show="catching">
-        <img :key="shakeKey" src="/textures/HUD/Pokeball.png"
+        <img :key="shakeKey" :src="`/textures/Items/${throwingBall}.png`"
              :class="{ wiggle: wiggling, greyed: captureSuccess }" alt="" />
       </div>
 
@@ -58,15 +59,50 @@
       </div>
     </div>
 
-    <!-- Pokéball (catch button) or Trainer slider -->
-    <div class="pokeball"
-         @click="(encounter.isTrainer || isMissingNo) ? undefined : onCatch()"
-         :class="{
-           'act-disabled': (!encounter.isTrainer && !isMissingNo) && (!canAct || battleOver || captureSuccess || forcedSwitch),
-           'trainer-slot': encounter.isTrainer || isMissingNo,
-         }">
-      <img :src="encounter.isTrainer ? encounter.trainerSlider : '/textures/HUD/Pokeball.png'" alt=""
-           :style="encounter.isTrainer ? { width: '150px', margin: '25px', objectFit: 'contain' } : {}" />
+    <!-- Bag row — balls + consumables -->
+    <div class="bag-row">
+      <!-- Pokéball: always available, disabled in trainer battles -->
+      <div class="bag-slot"
+           :class="{ 'act-disabled': encounter.isTrainer || !canAct || battleOver || captureSuccess || forcedSwitch }"
+           @click="onCatch(23)">
+        <img src="/textures/Items/23.png" alt="Pokéball" />
+        <span class="bag-item-count">∞</span>
+      </div>
+      <!-- Great Ball: ≥76 seen -->
+      <div v-if="hasGreatBall" class="bag-slot"
+           :class="{ 'act-disabled': encounter.isTrainer || !canAct || battleOver || captureSuccess || forcedSwitch }"
+           @click="onCatch(24)">
+        <img src="/textures/Items/24.png" alt="Great Ball" />
+        <span class="bag-item-count">∞</span>
+      </div>
+      <!-- Ultra Ball: all 151 seen -->
+      <div v-if="hasUltraBall" class="bag-slot"
+           :class="{ 'act-disabled': encounter.isTrainer || !canAct || battleOver || captureSuccess || forcedSwitch }"
+           @click="onCatch(25)">
+        <img src="/textures/Items/25.png" alt="Ultra Ball" />
+        <span class="bag-item-count">∞</span>
+      </div>
+      <!-- Master Ball: all 151 caught — also works on MissingNo -->
+      <div v-if="hasMasterBall" class="bag-slot"
+           :class="{ 'act-disabled': encounter.isTrainer || !canAct || battleOver || captureSuccess || forcedSwitch }"
+           @click="onCatch(26)">
+        <img src="/textures/Items/26.png" alt="Master Ball" />
+        <span class="bag-item-count">∞</span>
+      </div>
+      <!-- Potion: 3 per battle -->
+      <div class="bag-slot"
+           :class="{ 'item-active': itemMode === 'potion', 'act-disabled': battleOver || potions <= 0 }"
+           @click="toggleItemMode('potion')">
+        <img src="/textures/Items/8.png" alt="Potion" />
+        <span class="bag-item-count">{{ potions }}</span>
+      </div>
+      <!-- Revive: 1 per battle -->
+      <div class="bag-slot"
+           :class="{ 'item-active': itemMode === 'revive', 'act-disabled': battleOver || revives <= 0 }"
+           @click="toggleItemMode('revive')">
+        <img src="/textures/Items/14.png" alt="Revive" />
+        <span class="bag-item-count">{{ revives }}</span>
+      </div>
     </div>
 
     <!-- Move buttons -->
@@ -89,21 +125,36 @@
       </div>
     </div>
 
-    <!-- Team slots — click to switch -->
+    <!-- Team slots — click to switch or use item -->
     <div class="pokemons">
       <div v-for="(slot, i) in saveStore.team" :key="i" :id="`Slot${i+1}`"
            :class="{
-             'act-disabled': battleOver || i === 0 || !slot.id || slot.hp <= 0
-               || (!canAct && !forcedSwitch),
-             'slot-choose': forcedSwitch && i > 0 && slot.id > 0 && slot.hp > 0,
+             'act-disabled': !itemMode && (battleOver || i === 0 || !slot.id || slot.hp <= 0 || (!canAct && !forcedSwitch)),
+             'slot-choose': !itemMode && forcedSwitch && i > 0 && slot.id > 0 && slot.hp > 0,
              'slot-dead': slot.id > 0 && slot.hp <= 0,
+             'item-target': itemMode && isValidTarget(slot),
+             'item-invalid': itemMode && slot.id > 0 && !isValidTarget(slot),
            }"
            @click="onSwitchPokemon(i)">
-        <p>{{ slotName(slot) }}</p>
-        <p>{{ slotHP(slot) }}</p>
+        <template v-if="slot.id">
+          <div class="party-card">
+            <img src="/textures/HUD/Pokeball.png" class="party-ball" alt="" />
+            <div class="party-entry">
+              <img :src="`/textures/Mini/Png/${padId(slot.id)}.png`" class="party-sprite" alt="" />
+              <div class="party-info">
+                <div class="party-name">{{ slot.nickname?.trim() || pokedex(slot.id) }}</div>
+                <div class="party-lv">Lv.<b>{{ slot.lvl }}</b></div>
+                <div class="party-hp-bar">
+                  <div class="party-hp-fill" :style="{ width: slotHpPct(slot)*100+'%', backgroundColor: hpColor(slotHpPct(slot)) }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
   </main>
+  </div>
 
   <AppHeader
     :label="allFainted ? 'Health Center' : 'BACK TO MAP'"
@@ -187,12 +238,35 @@ const catching = ref(false)
 const wiggling = ref(false)
 const captureSuccess = ref(false)
 const shakeKey = ref(0)
+const throwingBall = ref(23)
 const trainerTeamIndex = ref(0)
 const trainerVisible   = ref(false)
 const trainerIsOutro   = ref(false)
 const pokemonVisible   = ref(false)
 const trainerAnimClass = ref('')
 const pokemonAnimClass = ref('')
+
+// ── Bag / items ────────────────────────────────────────────────────
+const potions  = ref(3)
+const revives  = ref(1)
+const itemMode = ref<'potion' | 'revive' | null>(null)
+
+// ── Ball unlock thresholds ─────────────────────────────────────────
+const seenCount = computed(() =>
+  Object.keys(saveStore.pokedex)
+    .filter(k => { const n = Number(k); return n >= 1 && n <= 151 })
+    .filter(k => saveStore.pokedex[k] === 'seen' || saveStore.pokedex[k] === 'caught')
+    .length
+)
+const caughtCount = computed(() =>
+  Object.keys(saveStore.pokedex)
+    .filter(k => { const n = Number(k); return n >= 1 && n <= 151 })
+    .filter(k => saveStore.pokedex[k] === 'caught')
+    .length
+)
+const hasGreatBall  = computed(() => seenCount.value  >= 76)
+const hasUltraBall  = computed(() => seenCount.value  >= 151)
+const hasMasterBall = computed(() => caughtCount.value >= 151)
 const trainerSrc = computed(() =>
   trainerIsOutro.value ? encounter.trainerStill : encounter.trainerPortrait
 )
@@ -221,7 +295,7 @@ const playerPokemonSprite = computed(() => {
 // ── Names / levels ────────────────────────────────────────────────
 const enemyName = computed(() => isMissingNo.value ? 'MissingNo.' : pokedex(rivalNum.value))
 const enemyLevel = computed(() => isMissingNo.value ? missingNoLevel.value : encounter.level)
-const playerName = computed(() => pokedex(active.value?.id ?? 1))
+const playerName = computed(() => active.value?.nickname?.trim() || pokedex(active.value?.id ?? 1))
 const playerLvl  = computed(() => active.value?.lvl ?? 1)
 
 // ── HP ────────────────────────────────────────────────────────────
@@ -300,12 +374,62 @@ function pickEnemyMoves() {
 }
 
 // ── Team slot display ─────────────────────────────────────────────
-function slotName(slot: { id: number; lvl: number }) {
-  return slot.id ? `${pokedex(slot.id)} | LVL ${slot.lvl}` : ''
+function slotHpPct(slot: { id: number; hp: number; lvl: number }): number {
+  if (!slot.id) return 0
+  const maxHP = calcMaxHP(STATS[String(slot.id)]?.hp ?? 45, slot.lvl)
+  return Math.max(0, Math.min(1, slot.hp / maxHP))
 }
-function slotHP(slot: { id: number; hp: number }) {
-  if (!slot.id) return ''
-  return `${slot.hp}/${calcMaxHP(STATS[String(slot.id)]?.hp ?? 45, saveStore.team.find(s => s.id === slot.id)?.lvl ?? 1)}`
+function hpColor(pct: number): string {
+  if (pct > 0.5) return '#00cc44'
+  if (pct > 0.25) return '#ffcc00'
+  return '#cc2200'
+}
+
+// ── Item use ──────────────────────────────────────────────────────
+function toggleItemMode(mode: 'potion' | 'revive') {
+  itemMode.value = itemMode.value === mode ? null : mode
+}
+function isValidTarget(slot: { id: number; hp: number; lvl: number }): boolean {
+  if (!slot.id) return false
+  if (itemMode.value === 'potion') {
+    const maxHP = calcMaxHP(STATS[String(slot.id)]?.hp ?? 45, slot.lvl)
+    return slot.hp > 0 && slot.hp < maxHP
+  }
+  if (itemMode.value === 'revive') return slot.hp <= 0
+  return false
+}
+function usePotion(i: number) {
+  const slot = saveStore.team[i]
+  if (!slot?.id) return
+  const maxHP = calcMaxHP(STATS[String(slot.id)]?.hp ?? 45, slot.lvl)
+  if (slot.hp >= maxHP) { log(`${slot.nickname?.trim() || pokedex(slot.id)}'s HP is already full!`); itemMode.value = null; return }
+  const heal = Math.min(20, maxHP - slot.hp)
+  slot.hp += heal
+  if (i === 0) playerHP.value = slot.hp
+  potions.value--
+  log(`Used Potion on ${slot.nickname?.trim() || pokedex(slot.id)}! +${heal} HP.`)
+  itemMode.value = null
+  canAct.value = false
+  saveStore.save()
+  setTimeout(() => enemyTurn(), 500)
+}
+function useRevive(i: number) {
+  const slot = saveStore.team[i]
+  if (!slot?.id || slot.hp > 0) { log('That Pokémon isn\'t fainted!'); itemMode.value = null; return }
+  const maxHP = calcMaxHP(STATS[String(slot.id)]?.hp ?? 45, slot.lvl)
+  slot.hp = Math.floor(maxHP / 2)
+  revives.value--
+  log(`${slot.nickname?.trim() || pokedex(slot.id)} was revived!`)
+  itemMode.value = null
+  saveStore.save()
+  if (forcedSwitch.value) {
+    // Enemy already attacked this turn (caused the faint) — just keep forced switch active
+    // so player can pick which Pokémon to send out next
+    return
+  }
+  // Normal turn: consuming the player's action, enemy responds
+  canAct.value = false
+  setTimeout(() => enemyTurn(), 500)
 }
 
 // ── Utilities ─────────────────────────────────────────────────────
@@ -584,6 +708,10 @@ async function onMove(i: number) {
 
 // ── Switch Pokémon ────────────────────────────────────────────────
 async function onSwitchPokemon(i: number) {
+  // Item-use mode: apply item to clicked slot
+  if (itemMode.value === 'potion') { usePotion(i); return }
+  if (itemMode.value === 'revive') { useRevive(i); return }
+
   if (battleOver.value) return
   if (!canAct.value && !forcedSwitch.value) return
   if (i === 0 || !saveStore.team[i]?.id || saveStore.team[i].hp <= 0) return
@@ -610,18 +738,33 @@ async function onSwitchPokemon(i: number) {
   }
 }
 
-// ── Throw Pokéball ────────────────────────────────────────────────
-async function onCatch() {
-  if (!canAct.value || battleOver.value || captureSuccess.value) return
+// ── Throw ball ────────────────────────────────────────────────────
+const BALL_NAMES: Record<number, string> = { 23: 'Pokéball', 24: 'Great Ball', 25: 'Ultra Ball', 26: 'Master Ball' }
+
+async function onCatch(ballNum = 23) {
+  if (encounter.isTrainer) return
+  if (!canAct.value || battleOver.value || captureSuccess.value || forcedSwitch.value) return
+  // MissingNo only yields to Master Ball
+  if (isMissingNo.value && ballNum !== 26) {
+    log("It won't work... A stronger ball is needed!")
+    return
+  }
+
   canAct.value = false
   catching.value = true
-  log('You threw a Pokéball!')
+  throwingBall.value = ballNum
+  log(`You threw a ${BALL_NAMES[ballNum] ?? 'Pokéball'}!`)
 
   const hpRatio = enemyHP.value / enemyMaxHP.value
-  const escapePerShake = 0.55 * hpRatio
+  const masterBall = ballNum === 26
+  const escapePerShake = masterBall ? 0
+    : ballNum === 25 ? 0.35 * hpRatio
+    : ballNum === 24 ? 0.42 * hpRatio
+    : 0.55 * hpRatio
+  const shakes = masterBall ? 1 : 3
 
   let caught = true
-  for (let s = 0; s < 3; s++) {
+  for (let s = 0; s < shakes; s++) {
     shakeKey.value++
     wiggling.value = true
     await delay(700)
@@ -633,7 +776,7 @@ async function onCatch() {
   if (caught) {
     captureSuccess.value = true
     log(`Gotcha! ${enemyName.value} was caught!`)
-    const dexId = String(rivalNum.value)
+    const dexId = isMissingNo.value ? '0' : String(rivalNum.value)
     if (encounter.shiny) {
       saveStore.shinydex[dexId] = 'caught'
       saveStore.pokedex[dexId] = 'caught'
@@ -759,13 +902,23 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.battle-page {
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #060e16;
+  background-image: radial-gradient(circle, #1a2a3a 1.5px, transparent 1.5px);
+  background-size: 22px 22px;
+}
+
 main {
   height: 500px;
   width: 700px;
-  margin: auto;
-  margin-top: 120px;
-  box-shadow: 0 0 100px #888;
+  flex-shrink: 0;
+  box-shadow: 0 0 80px rgba(0,0,0,0.6);
   position: relative;
+  background: #0e1a26;
 }
 
 /* ── Arena ── */
@@ -830,7 +983,7 @@ main {
 #rival { position: absolute; top: 40%; right: 20%; transform: translateY(-50%); }
 #rival > img { width: 150%; }
 #catch-pos { position: absolute; top: 40%; right: 20%; transform: translateY(-50%); }
-#catch-pos > img { width: 80px; }
+#catch-pos > img { width: 36px; }
 #pokemon { position: absolute; top: 190px; left: 20px; }
 #pokemon > img { width: 200%; }
 
@@ -845,46 +998,87 @@ main {
 }
 .wiggle { animation: wiggle 0.65s ease-in-out 1; }
 
-/* ── Pokéball (catch button) ── */
-.pokeball {
-  display: inline-block;
-  height: 200px; width: 200px;
-  top: 0;
+/* ── Bag row (desktop: top-right panel) ── */
+.bag-row {
   position: absolute;
-  background-color: #CEC;
-  border: 1px solid black;
-  cursor: pointer;
-  vertical-align: top;
+  top: 0; left: 500px;
+  width: 200px; height: 200px;
+  background: #0b1520;
+  border-left: 2px solid #060e16;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 14px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
-.pokeball > img { width: 150px; margin: 25px; }
-.pokeball:hover { box-shadow: inset 0 0 50px #888; }
+.bag-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 10px 10px 8px;
+  border: 2px solid #2a4268;
+  background: #1c3050;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  width: 68px;
+  transition: background 0.1s;
+}
+.bag-slot:hover:not(.act-disabled):not(.trainer-slot) { background: #243a60; }
+.bag-slot > img { width: 36px; height: 36px; object-fit: contain; filter: drop-shadow(0 0 4px rgba(0,0,0,0.8)); }
+.bag-item-count {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #c8dff8;
+  letter-spacing: 0.5px;
+}
 
 /* ── Move buttons ── */
 .tackle {
-  display: inline-block;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px;
   height: 151px; width: 500px;
   position: absolute;
   bottom: 0; left: 0;
-  border-bottom: 1px solid black;
-  border-left: 1px solid black;
-  border-top: 1px solid black;
+  background: #060e16;
+  box-sizing: border-box;
 }
 .Power1, .Power2, .Power3, .Power4 {
-  position: absolute;
-  width: 200px; font-size: 20px; height: 50px;
-  border: 3px solid black;
-  border-radius: 30px;
-  text-align: center;
-  display: inline-block;
+  width: 100%; height: 100%;
+  border: 2px solid #2a4268;
+  border-radius: 0;
+  background: #1c3050;
+  color: #c8dff8;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
   cursor: pointer;
   user-select: none;
+  box-sizing: border-box;
 }
-.Power1:hover, .Power2:hover, .Power3:hover, .Power4:hover { box-shadow: inset 0 0 20px #888; }
-.Power1, .Power2 { bottom: 80px; }
-.Power1, .Power3 { left: 40px; }
-.Power2, .Power4 { left: 265px; }
-.Power3, .Power4 { bottom: 10px; }
-.Power1 > h2, .Power2 > h2, .Power3 > h2, .Power4 > h2 { margin: 4px; }
+/* Cut inner corners toward center */
+.Power1 { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 28px), calc(100% - 28px) 100%, 0 100%); }
+.Power2 { clip-path: polygon(0 0, 100% 0, 100% 100%, 28px 100%, 0 calc(100% - 28px)); }
+.Power3 { clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 0 100%); }
+.Power4 { clip-path: polygon(28px 0, 100% 0, 100% 100%, 0 100%, 0 28px); }
+.Power1:hover:not(.act-disabled), .Power2:hover:not(.act-disabled),
+.Power3:hover:not(.act-disabled), .Power4:hover:not(.act-disabled) { background: #243a60; }
+.Power1 > h2, .Power2 > h2, .Power3 > h2, .Power4 > h2 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  font-weight: normal;
+  margin: 0; padding: 0;
+  text-align: center;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-word;
+}
 
 /* ── Team slots ── */
 .pokemons {
@@ -892,75 +1086,209 @@ main {
   height: 300px; width: 200px;
   position: absolute;
   bottom: 0; right: 0;
-  text-align: right;
-  font-weight: bold;
   vertical-align: bottom;
+  background: #0e120e;
 }
 .pokemons > div {
   box-sizing: border-box;
   height: 50px; width: 200px;
-  background-color: #a6a6a6;
-  border-bottom: 1px solid black;
-  border-left: 1px solid black;
+  background: transparent;
+  border-top: 1px solid rgba(0,0,0,0.4);
   cursor: pointer;
+  display: flex;
+  align-items: stretch;
+  padding: 3px 3px 3px 3px;
 }
-.pokemons > div:first-child { color: white; background-color: grey; }
-.pokemons > div:hover:not(.act-disabled) { background-color: #737373; color: white; }
+.pokemons > div:hover:not(.act-disabled) .party-card { filter: drop-shadow(0 2px 0 rgba(0,0,0,0.5)) brightness(1.15); }
 
-/* ── Disabled ── */
+/* ── Map-style party card ── */
+.party-card {
+  position: relative;
+  width: 100%;
+  filter: drop-shadow(0 2px 0 rgba(0,0,0,0.5));
+  transition: filter 0.12s;
+}
+.party-ball {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 14px; height: 14px;
+  image-rendering: pixelated;
+  opacity: 0.9;
+  z-index: 2;
+}
+.party-entry {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 4px;
+  height: 100%;
+  box-sizing: border-box;
+  background:
+    linear-gradient(135deg,
+      transparent        18px,
+      #3a6030            18px,
+      #3a6030            20px,
+      transparent        20px
+    ),
+    linear-gradient(180deg, #2a4a22 0%, #162e10 100%);
+  clip-path: polygon(20px 0, 100% 0, 100% 100%, 0 100%, 0 20px);
+}
+.slot-dead .party-entry {
+  background:
+    linear-gradient(135deg,
+      transparent 18px, #602020 18px, #602020 20px, transparent 20px
+    ),
+    linear-gradient(180deg, #3a1010 0%, #1e0808 100%);
+}
+.party-sprite {
+  width: 34px;
+  height: 34px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+.party-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.party-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.55);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.party-lv {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 4px;
+  color: rgba(255,255,255,0.75);
+}
+.party-lv b { font-size: 5px; }
+.party-hp-bar {
+  height: 4px;
+  background: rgba(0,0,0,0.35);
+  border-radius: 1px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+.party-hp-fill {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 0.3s, background-color 0.3s;
+}
+
+/* Active slot (first) — slightly brighter tint */
+.pokemons > div:first-child .party-entry {
+  background:
+    linear-gradient(135deg,
+      transparent 18px, #4a7a38 18px, #4a7a38 20px, transparent 20px
+    ),
+    linear-gradient(180deg, #3a5e2a 0%, #1e3e12 100%);
+}
+
+/* ── Disabled / item states ── */
 .act-disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 .trainer-slot { cursor: default; pointer-events: none; }
+.bag-slot.item-active { border-color: #44cc88 !important; background: #183828 !important; }
+.bag-slot.item-active .bag-item-count { color: #88ffbb; }
+.item-target .party-entry { animation: pulse-item 0.75s ease-in-out infinite alternate; cursor: pointer; }
+.item-invalid { opacity: 0.35; pointer-events: none; }
+@keyframes pulse-item {
+  from { filter: brightness(1); }
+  to   { filter: brightness(1.6) saturate(1.4); }
+}
 
 /* ════════════════════════════════════════════════════════════
-   MOBILE REDESIGN — vertical stack layout
+   MOBILE — full-screen column layout, GBA-inspired palette
    ════════════════════════════════════════════════════════════ */
 @media (max-width: 600px) {
-  /* Main becomes a full-width vertical column */
+  .battle-page {
+    min-height: 100dvh;
+    padding-top: 70px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    background: #0e1a26;
+  }
   main {
     width: 100%;
     height: auto;
-    margin: 70px 0 0;
+    flex: 1;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     box-shadow: none;
-    position: relative; /* so .pokeball absolute still works inside */
+    background: #0e1a26;
+    position: relative;
   }
 
-  /* Arena: full width, 55vw tall (keeps sprites visible) */
+  /* ── Arena ── */
   .monitor {
     width: 100%;
-    height: 55vw;
-    min-height: 200px;
+    height: 48vw;
+    min-height: 210px;
     display: block;
+    flex-shrink: 0;
+    border-radius: 0;
+    border-bottom: 3px solid #060e16;
   }
 
-  /* Reposition sprites inside the shrunken arena */
-  #rival       { top: 28%; right: 12%; }
-  #rival > img { width: 100%; }
-  #catch-pos   { top: 28%; right: 12%; }
-  #pokemon     { top: auto; bottom: 68px; left: 6%; }
-  #pokemon > img { width: 140%; }
+  /* Sprite positions inside the shrunken arena */
+  #rival        { top: 24%; right: 10%; }
+  #rival > img  { width: 100%; }
+  #catch-pos    { top: 24%; right: 10%; }
+  #pokemon      { top: auto; bottom: 62px; left: 5%; }
+  #pokemon > img { width: 130%; }
 
-  /* HUDs: tighter */
-  .enemy-hud  { font-size: 10px; padding: 3px 6px; min-width: 100px; }
-  .player-hud { font-size: 10px; padding: 3px 6px; min-width: 100px; bottom: 68px; }
-  .battle-log { font-size: 11px; height: 54px; }
+  /* ── HUDs ── */
+  .enemy-hud {
+    top: 8px; left: 8px; right: auto;
+    font-size: 10px; padding: 6px 10px;
+    min-width: 115px;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.75);
+  }
+  .player-hud {
+    bottom: 66px; right: 8px; left: auto;
+    font-size: 10px; padding: 6px 10px;
+    min-width: 115px;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.75);
+    text-align: right;
+  }
+  .battle-log { font-size: 10px; height: 58px; padding: 6px 10px; line-height: 1.5; }
 
-  /* Catch (pokeball) button: row under arena, full width, shorter */
-  .pokeball {
+  /* ── Bag row (mobile: horizontal item strip) ── */
+  .bag-row {
     position: relative;
-    top: auto; bottom: auto; left: auto; right: auto;
-    width: 100%;
-    height: 70px;
+    top: auto; left: auto;
+    width: 100%; height: auto;
+    background: #0b1520;
+    border-top: 2px solid #060e16;
+    border-bottom: 2px solid #060e16;
     display: flex;
+    flex-direction: row;
     align-items: center;
-    justify-content: center;
-    border-top: 1px solid #888;
+    padding: 8px 12px;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
   }
-  .pokeball > img { width: auto; height: 50px; margin: 0; }
-  .trainer-slot.pokeball > img { width: auto; max-height: 60px; margin: 0; }
+  .bag-slot {
+    width: 56px; height: 56px;
+    padding: 8px 8px 6px;
+    gap: 4px;
+  }
+  .bag-slot > img { width: 28px; height: 28px; }
+  .bag-item-count { font-size: 6px; }
 
-  /* Move buttons: full width, 2×2 grid */
+  /* ── Move buttons — 2×2 grid with cut inner corners ── */
   .tackle {
     position: relative;
     bottom: auto; left: auto;
@@ -968,49 +1296,92 @@ main {
     height: auto;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    padding: 4px;
+    gap: 16px;
+    padding: 16px;
     border: none;
-    border-top: 2px solid #333;
-    background: #111;
+    background: #060e16;
   }
   .Power1, .Power2, .Power3, .Power4 {
     position: relative;
     top: auto; bottom: auto; left: auto; right: auto;
-    width: 100%;
-    height: 44px;
-    font-size: 13px;
-    border-radius: 8px;
+    width: 100%; height: 68px;
+    border: 2px solid #2a4268;
+    border-radius: 0;
+    background: #1c3050;
+    color: #c8dff8;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    cursor: pointer;
+    user-select: none;
   }
-  .Power1 > h2, .Power2 > h2, .Power3 > h2, .Power4 > h2 { font-size: 12px; margin: 6px 0; }
+  /* Cut inner corners toward center — creates diamond space for pokeball */
+  .Power1 { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 32px), calc(100% - 32px) 100%, 0 100%); }
+  .Power2 { clip-path: polygon(0 0, 100% 0, 100% 100%, 32px 100%, 0 calc(100% - 32px)); }
+  .Power3 { clip-path: polygon(0 0, calc(100% - 32px) 0, 100% 32px, 100% 100%, 0 100%); }
+  .Power4 { clip-path: polygon(32px 0, 100% 0, 100% 100%, 0 100%, 0 32px); }
 
-  /* Team slots: horizontal strip */
+  .Power1:hover:not(.act-disabled),
+  .Power2:hover:not(.act-disabled),
+  .Power3:hover:not(.act-disabled),
+  .Power4:hover:not(.act-disabled) { background: #243a60; box-shadow: none; }
+  .Power1 > h2, .Power2 > h2, .Power3 > h2, .Power4 > h2 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    font-weight: normal;
+    margin: 0; padding: 0;
+    text-align: center;
+    line-height: 1.5;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  /* ── Party grid — 3 per row ── */
   .pokemons {
     position: relative;
     bottom: auto; right: auto;
     width: 100%;
     height: auto;
-    display: flex;
-    flex-direction: row;
-    text-align: center;
-    border-top: 2px solid #555;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 56px 56px;
+    background: #0e120e;
+    border-top: 2px solid #060e16;
+    flex-shrink: 0;
+    gap: 2px;
+    padding: 3px;
+    box-sizing: border-box;
   }
   .pokemons > div {
-    flex: 1;
-    width: auto;
-    height: 40px;
-    font-size: 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 2px;
-    border-bottom: none;
-    border-left: 1px solid #888;
+    width: auto; height: 100%;
+    background: transparent;
+    border: none;
+    padding: 0;
     overflow: hidden;
+    display: flex;
+    align-items: stretch;
+    cursor: pointer;
   }
-  .pokemons > div:first-child { border-left: none; }
-  .pokemons > div p { margin: 0; line-height: 1.2; font-size: 9px; }
+  .pokemons > div .party-card { width: 100%; }
+  .pokemons > div .party-entry {
+    padding: 3px 4px 3px 3px;
+    gap: 2px;
+  }
+  .pokemons > div .party-sprite {
+    width: 30px; height: 30px;
+    margin-left: 10px;
+  }
+  .pokemons > div .party-name { font-size: 4px; }
+  .pokemons > div .party-lv { font-size: 3px; }
+  .pokemons > div .party-lv b { font-size: 4px; }
+  .pokemons > div .party-ball { width: 11px; height: 11px; }
+  @keyframes pulse-slot {
+    from { opacity: 1; }
+    to   { opacity: 1; }
+  }
 }
 
 /* ── Trainer / Pokémon entrance & exit animations ── */
@@ -1041,7 +1412,16 @@ main {
 .anim-trainer-enter-right { animation: kf-trainer-enter-right 0.5s ease-out forwards; }
 .anim-pokemon-enter      { animation: kf-pokemon-enter       0.45s ease-out forwards; }
 .anim-pokemon-faint      { animation: kf-pokemon-faint       0.55s ease-in  forwards; }
-.slot-choose { animation: pulse-slot 0.8s ease-in-out infinite alternate; cursor: pointer; }
-@keyframes pulse-slot { from { background-color: #a6a6a6; } to { background-color: #4a8a4a; } }
-.slot-dead { background-color: #5a2020 !important; color: #884444 !important; }
+.slot-choose .party-entry { animation: pulse-card 0.8s ease-in-out infinite alternate; cursor: pointer; }
+@keyframes pulse-card {
+  from { filter: brightness(1); }
+  to   { filter: brightness(1.5); }
+}
+.slot-dead .party-entry {
+  background:
+    linear-gradient(135deg,
+      transparent 18px, #602020 18px, #602020 20px, transparent 20px
+    ),
+    linear-gradient(180deg, #3a1010 0%, #1e0808 100%);
+}
 </style>

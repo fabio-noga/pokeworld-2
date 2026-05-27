@@ -1,27 +1,108 @@
 <template>
   <div
     class="joy-base"
+    :style="joyBaseStyle"
     @pointerdown="onDown"
     @pointermove="onMove"
     @pointerup="onUp"
     @pointercancel="onUp"
   >
+    <!-- Drag handle — top-right corner, separate from joystick touch area -->
+    <div
+      class="joy-handle"
+      title="Drag to move"
+      @pointerdown.stop="onHandleDown"
+    >⠿</div>
+
     <div class="joy-ring"></div>
     <div class="joy-knob" :class="{ active: dragging }" :style="knobStyle"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 const emit = defineEmits<{
   move: [keyCode: number]
   stop: []
 }>()
 
-const BASE_R   = 55   // half the base diameter — keep in sync with CSS (118px / 2 - border)
-const DEADZONE = 18   // px from centre before direction registers
+const STORAGE_KEY = 'pkw_dpad_pos'
+const JOY_SIZE    = 118   // matches CSS width/height
+const BASE_R      = 55    // half diameter for knob clamping
+const DEADZONE    = 18
 
+// ── Joystick position ─────────────────────────────────────────────
+const joyPos = ref<{ x: number; y: number } | null>(null)
+
+onMounted(() => {
+  const saved = localStorage.getItem(STORAGE_KEY)
+  if (saved) {
+    try {
+      const p = JSON.parse(saved) as { x: number; y: number }
+      // Clamp to current viewport
+      const x = Math.max(0, Math.min(window.innerWidth  - JOY_SIZE, p.x))
+      const y = Math.max(0, Math.min(window.innerHeight - JOY_SIZE, p.y))
+      joyPos.value = { x, y }
+      return
+    } catch { /* ignore bad data */ }
+  }
+  // Default: bottom-right on mobile, bottom-left on desktop
+  const mobile = window.innerWidth <= 600
+  joyPos.value = {
+    x: mobile
+      ? window.innerWidth  - JOY_SIZE - 20
+      : 24,
+    y: window.innerHeight - JOY_SIZE - 24,
+  }
+})
+
+const joyBaseStyle = computed(() => {
+  if (!joyPos.value) return {}
+  return {
+    left:   joyPos.value.x + 'px',
+    top:    joyPos.value.y + 'px',
+    right:  'auto',
+    bottom: 'auto',
+  }
+})
+
+// ── Drag handle — moves the whole joystick ────────────────────────
+let hStartClientX = 0, hStartClientY = 0
+let hStartPosX    = 0, hStartPosY    = 0
+
+function onHandleDown(e: PointerEvent) {
+  e.preventDefault()
+  if (!joyPos.value) return
+  hStartClientX = e.clientX
+  hStartClientY = e.clientY
+  hStartPosX    = joyPos.value.x
+  hStartPosY    = joyPos.value.y
+  const el = e.currentTarget as HTMLElement
+  el.setPointerCapture(e.pointerId)
+  el.addEventListener('pointermove',   onHandleMove)
+  el.addEventListener('pointerup',     onHandleUp)
+  el.addEventListener('pointercancel', onHandleUp)
+}
+
+function onHandleMove(e: PointerEvent) {
+  const dx = e.clientX - hStartClientX
+  const dy = e.clientY - hStartClientY
+  joyPos.value = {
+    x: Math.max(0, Math.min(window.innerWidth  - JOY_SIZE, hStartPosX + dx)),
+    y: Math.max(0, Math.min(window.innerHeight - JOY_SIZE, hStartPosY + dy)),
+  }
+}
+
+function onHandleUp(e: PointerEvent) {
+  if (joyPos.value) localStorage.setItem(STORAGE_KEY, JSON.stringify(joyPos.value))
+  const el = e.currentTarget as HTMLElement
+  el.removeEventListener('pointermove',   onHandleMove)
+  el.removeEventListener('pointerup',     onHandleUp)
+  el.removeEventListener('pointercancel', onHandleUp)
+}
+
+// ── Joystick knob ─────────────────────────────────────────────────
 const knobX    = ref(0)
 const knobY    = ref(0)
 const dragging = ref(false)
@@ -30,9 +111,7 @@ const knobStyle = computed(() => ({
   transform: `translate(calc(-50% + ${knobX.value}px), calc(-50% + ${knobY.value}px))`,
 }))
 
-let baseX = 0
-let baseY = 0
-let lastKey: number | null = null
+let baseX = 0, baseY = 0, lastKey: number | null = null
 
 function onDown(e: PointerEvent) {
   e.preventDefault()
@@ -74,21 +153,19 @@ function update(cx: number, cy: number) {
 
   const deg = angle * 180 / Math.PI
   let key: number
-  if      (deg > -45  && deg <=  45)  key = 39  // right
-  else if (deg >  45  && deg <= 135)  key = 40  // down
-  else if (deg > -135 && deg <= -45)  key = 38  // up
-  else                                key = 37  // left
+  if      (deg > -45  && deg <=  45)  key = 39
+  else if (deg >  45  && deg <= 135)  key = 40
+  else if (deg > -135 && deg <= -45)  key = 38
+  else                                key = 37
 
-  if (key !== lastKey) {
-    lastKey = key
-    emit('move', key)
-  }
+  if (key !== lastKey) { lastKey = key; emit('move', key) }
 }
 </script>
 
 <style scoped>
 .joy-base {
   position: fixed;
+  /* default position — overridden by JS via joyBaseStyle */
   bottom: 24px;
   left: 24px;
   width: 118px;
@@ -103,6 +180,31 @@ function update(cx: number, cy: number) {
   user-select: none;
   cursor: grab;
 }
+
+/* ── Drag handle ── */
+.joy-handle {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  z-index: 2;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.joy-handle:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.1);
+}
+.joy-handle:active { cursor: grabbing; }
 
 .joy-ring {
   position: absolute;

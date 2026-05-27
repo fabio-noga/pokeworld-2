@@ -150,4 +150,9 @@ function pickPad() {
 
 @keyframes qm-in  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes qm-out { from { opacity: 1; transform: translateY(0);     } to { opacity: 0; transform: translateY(10px); } }
+
+/* Hide entirely on mobile — no mini windows on small screens */
+@media (max-width: 600px) {
+  .qm-root { display: none !important; }
+}
 </style>
