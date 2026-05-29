@@ -128,23 +128,24 @@ export const useSaveStore = defineStore('save', () => {
     return Math.floor(2 * baseHP * level / 100) + level + 10
   }
 
-  // Base HP stats for starters; level 7 computed HP: Bulbasaur=23, Charmander=22, Squirtle=23
+  // Base HP stats for starters; level 6 computed HP: Bulbasaur=21, Charmander=20, Squirtle=21
   const STARTER_DATA: Record<number, { baseHP: number; moves: { id: number; pp: number }[] }> = {
-    1: { baseHP: 45, moves: [{ id: 81, pp: 35 }, { id: 96, pp: 25 }, { id: 91, pp: 25 }, { id: 61, pp: 25 }] },
-    4: { baseHP: 39, moves: [{ id: 66, pp: 35 }, { id: 96, pp: 25 }, { id: 26, pp: 25 }, { id: 30, pp: 15 }] },
-    7: { baseHP: 44, moves: [{ id: 81, pp: 35 }, { id: 96, pp: 25 }, { id:  9, pp: 30 }, { id: 92, pp: 25 }] },
+    1:  { baseHP: 45, moves: [{ id: 81, pp: 35 }, { id: 96, pp: 25 }, { id: 91, pp: 25 }, { id: 61, pp: 25 }] },
+    4:  { baseHP: 39, moves: [{ id: 66, pp: 35 }, { id: 96, pp: 25 }, { id: 26, pp: 25 }, { id: 30, pp: 15 }] },
+    7:  { baseHP: 44, moves: [{ id: 81, pp: 35 }, { id: 96, pp: 25 }, { id:  9, pp: 30 }, { id: 92, pp: 25 }] },
+    25: { baseHP: 35, moves: [{ id: 86, pp: 30 }, { id: 96, pp: 25 }, { id: 59, pp: 30 }, { id: 110, pp: 20 }] },
   }
 
   function initNewGame(nome: string, sprite: string, starterPoke: number) {
     const starter = STARTER_DATA[starterPoke] ?? STARTER_DATA[1]
-    const starterHP = calcMaxHP(starter.baseHP, 7)
+    const starterHP = calcMaxHP(starter.baseHP, 6)
     playerData.nome = nome
     playerData.sprite = sprite
     playerData.dinheiro = 200
     playerData.gym = 0
     playerData.lvlMax = 100
     team.value = [
-      { id: starterPoke, lvl: 7, hp: starterHP, xp: 0, moves: starter.moves, slot: 1 },
+      { id: starterPoke, lvl: 6, hp: starterHP, xp: 0, moves: starter.moves, slot: 1 },
       { id: 0, lvl: 0, hp: 0, xp: 0, moves: [], slot: 2 },
       { id: 0, lvl: 0, hp: 0, xp: 0, moves: [], slot: 3 },
       { id: 0, lvl: 0, hp: 0, xp: 0, moves: [], slot: 4 },

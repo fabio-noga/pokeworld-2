@@ -17,6 +17,10 @@
           <span class="cur">{{ padActive ? '▶' : ' ' }}</span>D-PAD
         </button>
 
+        <button v-if="debugMode" class="qm-row qm-network" @click="pickNetwork">
+          <span class="cur">{{ '' }}</span>NETWORK
+        </button>
+
         <button class="qm-row qm-exit" @click="open = false">
           <span class="cur">&nbsp;</span>EXIT
         </button>
@@ -36,8 +40,8 @@
 import { ref } from 'vue'
 import { useModalStore } from '../stores/modals'
 
-const props = defineProps<{ padActive?: boolean }>()
-const emit  = defineEmits<{ 'toggle-dpad': [] }>()
+const props = defineProps<{ padActive?: boolean; debugMode?: boolean }>()
+const emit  = defineEmits<{ 'toggle-dpad': []; 'network-click': [] }>()
 
 const modalStore = useModalStore()
 const open = ref(false)
@@ -48,6 +52,10 @@ function pick(which: 'pc' | 'dex') {
 }
 function pickPad() {
   emit('toggle-dpad')
+  open.value = false
+}
+function pickNetwork() {
+  emit('network-click')
   open.value = false
 }
 </script>
@@ -142,6 +150,11 @@ function pickPad() {
 /* EXIT item */
 .qm-exit {
   color: #1e1e1e;
+}
+
+/* NETWORK item — debug only */
+.qm-network {
+  color: #2266cc;
 }
 
 /* ── Slide up from bottom ── */

@@ -44,6 +44,32 @@
     >{{ val }}</div>
   </div>
 
+  <!-- Other players (multiplayer) — same transform as map -->
+  <div class="other-players-layer" :style="mapStyle">
+    <div
+      v-for="p in mpStore.playersList" :key="p.id"
+      class="other-player"
+      :style="otherPlayerTileStyle(p.tile)"
+    >
+      <!-- Follower Pokémon — overworld sprite, trails behind -->
+      <img
+        v-if="p.followerId > 0"
+        :src="otherPetSrc(p)"
+        :class="['other-follower', { walking: p.walking }]"
+        :style="otherPetOffset(p.dir)"
+        alt=""
+      />
+      <!-- Name tag -->
+      <div class="other-player-name">{{ p.name }}</div>
+      <!-- Trainer sprite — same frame system as local player -->
+      <img
+        :src="`/sprites/trainers/${p.sprite}/${p.walking ? walkFrames[p.dir] : idleFrames[p.dir]}.png`"
+        class="other-trainer"
+        alt=""
+      />
+    </div>
+  </div>
+
   <!-- NPCs — share the same transform as the map so they scroll with it smoothly -->
   <div class="npc-layer" :style="mapStyle">
     <div
@@ -101,6 +127,26 @@
       </div>
     </div>
   </div>
+
+  <!-- Multiplayer toast -->
+  <Transition name="mp-toast">
+    <div v-if="mp.toastMsg.value" class="mp-toast">{{ mp.toastMsg.value }}</div>
+  </Transition>
+
+  <!-- First-run modal — name + starter selection for new players -->
+  <FirstRunModal
+    v-if="showFirstRun"
+    :initial-name="saveStore.playerData.nome !== 'Player' ? saveStore.playerData.nome : ''"
+    @confirm="onFirstRun"
+  />
+
+  <!-- Multiplayer modal -->
+  <MultiplayerModal
+    v-if="showMpModal"
+    :current-tile="playerTileRef"
+    :current-dir="currentDir"
+    @close="showMpModal = false"
+  />
 
   <!-- Player tracker (top right) -->
   <div id="PlayerTracker">
@@ -219,7 +265,7 @@
   </div>
 
   <!-- Quick menu (DEX / PC / D-PAD) — below #PlayerStats -->
-  <QuickMenu :pad-active="padVisible" @toggle-dpad="togglePad" />
+  <QuickMenu :pad-active="padVisible" :debug-mode="debugTiles" @toggle-dpad="togglePad" @network-click="showMpModal = true" />
 
   <!-- Virtual joystick -->
   <VirtualJoystick
@@ -237,8 +283,13 @@ import AppHeader from '../components/AppHeader.vue'
 import QuickMenu from '../components/QuickMenu.vue'
 import VirtualJoystick from '../components/VirtualJoystick.vue'
 import PokemonInfoModal from '../components/PokemonInfoModal.vue'
+import MultiplayerModal from '../components/MultiplayerModal.vue'
+import FirstRunModal from '../components/FirstRunModal.vue'
 import { useAuthStore } from '../stores/auth'
 import { useSaveStore } from '../stores/save'
+import { useMultiplayer, autoConnect, broadcastMove, broadcastFollower } from '../composables/useMultiplayer'
+import { useMultiplayerStore, type Direction } from '../stores/multiplayer'
+import { getOrCreateUUID, isFirstSession } from '../utils/uuid'
 import type { TeamSlot } from '../stores/save'
 import { pokedex, padId } from '../data/pokemon'
 import statsData from '../data/pokemon-stats.json'
@@ -248,6 +299,45 @@ const STATS = statsData as Record<string, StatsEntry>
 const router = useRouter()
 const authStore = useAuthStore()
 const saveStore = useSaveStore()
+const mp = useMultiplayer()
+const mpStore = useMultiplayerStore()
+
+// ── Multiplayer UI ───────────────────────────────────────────────
+const showMpModal   = ref(false)
+const showFirstRun  = ref(false)
+const currentDir    = ref<Direction>('down')
+// Sprite frames per direction: idle and walking
+const idleFrames: Record<Direction, number> = { down: 1, up: 10, left: 4, right: 7 }
+const walkFrames: Record<Direction, number> = { down: 2, up: 11, left: 5, right: 9 }
+
+// ── Other-player follower helpers ────────────────────────────────────────────
+// Overworld frame: idle / walk per direction (matches local pet frame system)
+const petIdleFrame: Record<Direction, number> = { down: 1, up: 7, left: 3, right: 5 }
+const petWalkFrame: Record<Direction, number> = { down: 2, up: 8, left: 4, right: 6 }
+
+function otherPetSrc(p: { followerId: number; shiny: boolean; dir: Direction; walking: boolean }): string {
+  const frame = p.walking ? petWalkFrame[p.dir] : petIdleFrame[p.dir]
+  if (p.shiny) {
+    const folder = SHINY_FOLDERS[frame] ?? 'Front'
+    return `/textures/Overworld/Shiny/${folder}/${p.followerId}.png`
+  }
+  return `/textures/Overworld/Normal/${frame}/${p.followerId}.png`
+}
+
+// Follower pixel offsets relative to .other-player.
+// The div origin is now (tile_top - 30), so offsets = tile-relative values + 30:
+//   UP    tile+22  → div+52    (behind trainer, higher z)
+//   DOWN  tile-62  → div-32    (in front of trainer)
+//   LEFT  tile-18  → div+12    (right side)
+//   RIGHT tile-18  → div+12    (left side)
+function otherPetOffset(dir: Direction): Record<string, string> {
+  switch (dir) {
+    case 'up':    return { top: '52px',  left: '-6px',  zIndex: '2' }
+    case 'down':  return { top: '-32px', left: '-6px',  zIndex: '0' }
+    case 'left':  return { top: '12px',  left: '33px',  zIndex: '0' }
+    case 'right': return { top: '12px',  left: '-44px', zIndex: '0' }
+  }
+}
 
 // ── Map constants (identical to game.php) ───────────────────────
 const MAP_WIDTH = 24
@@ -331,6 +421,10 @@ function evolveInspectedSlot() {
   saveStore.pokedex[String(slot.id)] = 'caught'
   saveStore.save()
   inspectedSlot.value = null
+  // Broadcast follower change if the evolved Pokémon is in slot 0
+  if (idx === 0) {
+    broadcastFollower(slot.id, saveStore.shinydex?.[String(slot.id)] === 'caught')
+  }
 }
 
 // ── NPC walk-to state ─────────────────────────────────────────────
@@ -356,6 +450,18 @@ function npcTileStyle(tile: number) {
   return {
     left: (nc * TILE_SIZE) + 'px',
     top:  (nr * TILE_SIZE) + 'px',
+  }
+}
+
+// Other players: shift div 30 px above tile top so the trainer sprite aligns
+// with the local player's trainer (which is at playerCenter.top = tile_top - 30).
+// Follower offsets below are derived relative to this adjusted origin.
+function otherPlayerTileStyle(tile: number) {
+  const nr = Math.floor((tile - 1) / MAP_WIDTH)
+  const nc = (tile - 1) % MAP_WIDTH
+  return {
+    left: (nc * TILE_SIZE) + 'px',
+    top:  (nr * TILE_SIZE - 30) + 'px',
   }
 }
 
@@ -576,10 +682,13 @@ const allDead = computed(() => saveStore.team.filter(s => s.id > 0).every(s => s
 const WATER_POKEMON = [7,8,9,54,55,60,61,62,72,73,79,80,86,87,90,91,98,99,116,117,118,119,120,121,129,130,131,134,138,139,140,141]
 
 function triggerEncounter(num: number) {
-  const teamLevels = saveStore.team.filter(s => s.id > 0).map(s => s.lvl)
-  const minLvl = teamLevels.length ? Math.min(...teamLevels) : 2
-  const maxLvl = teamLevels.length ? Math.max(...teamLevels) : 5
-  const lvl = Math.max(1, Math.floor(Math.random() * (maxLvl - minLvl + 1)) + minLvl)
+  const activeTeam = saveStore.team.filter(s => s.id > 0)
+  const teamLevels = activeTeam.map(s => s.lvl)
+  const rawMin = teamLevels.length ? Math.min(...teamLevels) : 2
+  const maxLvl  = teamLevels.length ? Math.max(...teamLevels) : 5
+  // Solo party: clamp minimum wild level to 3 so early game isn't brutal
+  const minLvl  = activeTeam.length === 1 ? Math.min(rawMin, 3) : rawMin
+  const lvl = Math.floor(Math.random() * (maxLvl - minLvl + 1)) + minLvl
   const isShiny = Math.floor(Math.random() * 4) === 0
   tracker.number = num
   tracker.level = lvl
@@ -721,6 +830,7 @@ function onKey(keyCode: number) {
     if (stepToggle === 0) { setPlayerSprite(11); stepToggle++ }
     else { setPlayerSprite(12); stepToggle = 0 }
     facingFrame = 10
+    currentDir.value = 'up'
     setTimeout(() => setPlayerSprite(10), dur * 0.55)
 
     if (tileArray[playerPosition - MAP_WIDTH] !== 4 && tileArray[playerPosition - MAP_WIDTH] !== 6) {
@@ -728,6 +838,7 @@ function onKey(keyCode: number) {
       playerPosition -= MAP_WIDTH
       mapOffset.y += TILE_SIZE
       checkBattle()
+      broadcastMove(playerPosition, 'up')
       petTransition.value = `top ${dur}ms linear, left ${dur}ms linear`
       petPosition1 = petWalkToggle ? 8 : 7
       updatePetSprite()
@@ -742,6 +853,7 @@ function onKey(keyCode: number) {
     if (stepToggle === 0) { setPlayerSprite(2); stepToggle++ }
     else { setPlayerSprite(3); stepToggle = 0 }
     facingFrame = 1
+    currentDir.value = 'down'
     setTimeout(() => setPlayerSprite(1), dur * 0.55)
 
     if (tileArray[playerPosition + MAP_WIDTH] !== 4 && tileArray[playerPosition + MAP_WIDTH] !== 6) {
@@ -749,6 +861,7 @@ function onKey(keyCode: number) {
       playerPosition += MAP_WIDTH
       mapOffset.y -= TILE_SIZE
       checkBattle()
+      broadcastMove(playerPosition, 'down')
       petTransition.value = `top ${dur}ms linear, left ${dur}ms linear`
       petPosition1 = petWalkToggle ? 2 : 1
       updatePetSprite()
@@ -760,6 +873,7 @@ function onKey(keyCode: number) {
       moving.value = true
       playerPosition += MAP_WIDTH * 2
       mapOffset.y -= TILE_SIZE * 2
+      broadcastMove(playerPosition, 'down')
       petTransition.value = `top ${dur}ms linear, left ${dur}ms linear`
       petPosition1 = petWalkToggle ? 2 : 1
       updatePetSprite()
@@ -773,6 +887,7 @@ function onKey(keyCode: number) {
     // LEFT
     setPlayerSprite(5)
     facingFrame = 4
+    currentDir.value = 'left'
     setTimeout(() => setPlayerSprite(4), dur * 0.55)
 
     if (tileArray[playerPosition - 1] !== 4 && tileArray[playerPosition - 1] !== 6) {
@@ -780,6 +895,7 @@ function onKey(keyCode: number) {
       playerPosition -= 1
       mapOffset.x += TILE_SIZE
       checkBattle()
+      broadcastMove(playerPosition, 'left')
       petTransition.value = `top ${dur}ms linear, left ${dur}ms linear`
       petPosition1 = petWalkToggle ? 4 : 3
       updatePetSprite()
@@ -792,6 +908,7 @@ function onKey(keyCode: number) {
     // RIGHT
     setPlayerSprite(9)
     facingFrame = 7
+    currentDir.value = 'right'
     setTimeout(() => setPlayerSprite(7), dur * 0.55)
 
     if (tileArray[playerPosition + 1] !== 4 && tileArray[playerPosition + 1] !== 6) {
@@ -799,6 +916,7 @@ function onKey(keyCode: number) {
       playerPosition += 1
       mapOffset.x -= TILE_SIZE
       checkBattle()
+      broadcastMove(playerPosition, 'right')
       petTransition.value = `top ${dur}ms linear, left ${dur}ms linear`
       petPosition1 = petWalkToggle ? 6 : 5
       updatePetSprite()
@@ -850,6 +968,37 @@ async function doLogout() {
   router.push('/')
 }
 
+// ── Multiplayer helpers ───────────────────────────────────────────
+async function doAutoConnect() {
+  const followerId = saveStore.team[0]?.id ?? 1
+  await autoConnect({
+    uuid:   getOrCreateUUID(),
+    name:   saveStore.playerData.nome || 'Trainer',
+    sprite: String(saveStore.playerData.sprite),
+    tile:   playerPosition,
+    dir:    currentDir.value,
+    followerId,
+    shiny:  saveStore.shinydex?.[String(followerId)] === 'caught',
+  })
+  // Re-broadcast follower in case it changed while away (e.g. swapped lead in PC)
+  const lead = saveStore.team[0]
+  if (lead?.id > 0) {
+    broadcastFollower(lead.id, saveStore.shinydex?.[String(lead.id)] === 'caught')
+  }
+}
+
+function onFirstRun({ name, starterId }: { name: string; starterId: number }) {
+  showFirstRun.value = false
+  const isNew = !saveStore.hasSave()
+  if (isNew) {
+    saveStore.initNewGame(name, saveStore.playerData.sprite, starterId)
+  } else {
+    saveStore.playerData.nome = name
+    saveStore.save()
+  }
+  doAutoConnect()
+}
+
 // ── Healing & team management ─────────────────────────────────────
 function calcMaxHP(baseHP: number, level: number) {
   return Math.floor(2 * baseHP * level / 100) + level + 10
@@ -882,6 +1031,13 @@ function onDrop(i: number) {
   dragFrom.value = -1
   dragOver.value = -1
   saveStore.save()
+  // Broadcast new follower if slot 0 changed
+  if (a === 0 || i === 0) {
+    const lead = saveStore.team[0]
+    if (lead?.id > 0) {
+      broadcastFollower(lead.id, saveStore.shinydex?.[String(lead.id)] === 'caught')
+    }
+  }
 }
 
 // ── Pet walking animation (identical to game.php setInterval) ────
@@ -977,6 +1133,13 @@ onMounted(() => {
 
   // Keydown listener
   window.addEventListener('keydown', handleKeyDown)
+
+  // Multiplayer — show first-run modal for new players, otherwise auto-connect silently
+  if (isFirstSession()) {
+    showFirstRun.value = true
+  } else {
+    doAutoConnect()
+  }
 
   // Pet idle animation — only runs when the player is standing still
   petInterval = setInterval(() => {
@@ -1314,7 +1477,7 @@ onUnmounted(() => {
 .npc-layer {
   position: fixed;
   top: 0; left: 0;
-  z-index: 3;
+  z-index: 4;
   will-change: transform;
   pointer-events: none;
 }
@@ -1479,10 +1642,13 @@ onUnmounted(() => {
 
 /* ── Debug tile overlay ── */
 .tile-debug-layer {
-  position: absolute;
+  position: fixed;
   top: 0; left: 0;
+  width: 1155px;
+  height: 1920px;
+  overflow: hidden;
   pointer-events: none;
-  z-index: 999;
+  z-index: 3;
 }
 .tile-debug-cell {
   position: absolute;
@@ -1593,4 +1759,52 @@ onUnmounted(() => {
     min-width: 0;
   }
 }
+
+/* ── Multiplayer ──────────────────────────────────────────────── */
+.other-players-layer {
+  position: fixed; top: 0; left: 0; z-index: 4; pointer-events: none;
+}
+.other-player {
+  position: absolute;
+  overflow: visible;
+  /* Smoothly interpolate between tile positions (matches CHAIN_MS = 180ms) */
+  transition: left 180ms linear, top 180ms linear;
+}
+/* Trainer: same width as local player sprite, block so it sits in flow */
+.other-trainer {
+  display: block;
+  width: 55px; image-rendering: pixelated;
+}
+/* Follower: same 64×64 as .pet > img on the local player */
+.other-follower {
+  position: absolute;
+  width: 64px; height: 64px;
+  image-rendering: pixelated;
+}
+/* Bounce when walking — mirrors local triggerPetHop (-3px then back) */
+.other-follower.walking {
+  animation: other-pet-hop 280ms ease-out;
+}
+@keyframes other-pet-hop {
+  0%   { transform: translateY(0); }
+  40%  { transform: translateY(-3px); }
+  100% { transform: translateY(0); }
+}
+.other-player-name {
+  position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+  font-size: 9px; color: #fff; white-space: nowrap;
+  background: rgba(0,0,0,0.55); border-radius: 4px; padding: 1px 5px;
+  font-family: 'Pokemon GB', monospace; z-index: 2;
+}
+
+
+.mp-toast {
+  position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
+  background: rgba(6,14,22,0.92); border: 1px solid #2a4268;
+  color: #c8e0f0; font-size: 11px; padding: 6px 14px;
+  font-family: 'Pokemon GB', monospace; z-index: 300; pointer-events: none;
+  white-space: nowrap;
+}
+.mp-toast-enter-active, .mp-toast-leave-active { transition: opacity 0.3s; }
+.mp-toast-enter-from, .mp-toast-leave-to { opacity: 0; }
 </style>
