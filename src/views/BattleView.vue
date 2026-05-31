@@ -14,9 +14,9 @@
           <span v-if="isEnemyShiny" class="shiny-badge" title="Shiny!">✨</span>
           {{ enemyName }}
           <img v-if="saveStore.pokedex[String(rivalNum)] === 'caught'"
-               src="/textures/HUD/Pokeball.png" class="hud-ball" title="Normal caught" />
+               src="/sprites/ui/Pokeball.png" class="hud-ball" title="Normal caught" />
           <img v-if="saveStore.shinydex[String(rivalNum)] === 'caught'"
-               src="/textures/HUD/Pokeball.png" class="hud-ball hud-ball--shiny" title="Shiny caught" />
+               src="/sprites/ui/Pokeball.png" class="hud-ball hud-ball--shiny" title="Shiny caught" />
           <span class="hud-lv">Lv.{{ enemyLevel }}</span>
         </div>
         <div class="hp-bar-wrap"><div class="hp-bar" :style="enemyHpStyle"></div></div>
@@ -43,7 +43,8 @@
              id="RivalImg"
              :src="rivalSprite"
              alt=""
-             :class="pokemonAnimClass" />
+             :class="pokemonAnimClass"
+             @error="onRivalSpriteError" />
       </div>
 
       <!-- Catch ball — separate div so #rival > img width doesn't apply -->
@@ -148,7 +149,7 @@
            @click="onSwitchPokemon(i)">
         <template v-if="slot.id">
           <div class="party-card">
-            <img src="/textures/HUD/Pokeball.png" class="party-ball" alt="" />
+            <img src="/sprites/ui/Pokeball.png" class="party-ball" alt="" />
             <div class="party-entry">
               <img :src="`/textures/Mini/Png/${padId(slot.id)}.png`" class="party-sprite" alt="" />
               <div class="party-info">
@@ -172,14 +173,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useSaveStore } from '../stores/save'
 import { pokedex, padId } from '../data/pokemon'
 import movesData from '../data/moves.json'
 import statsData from '../data/pokemon-stats.json'
 import learnsetsData from '../data/learnsets.json'
 
-type MoveEntry  = { name: string; type: number; power: number; acc: number; pp: number }
+type MoveEntry  = { id?: number; name: string; type: number; power: number; acc: number; pp: number }
 type StatsEntry = { hp: number; atk: number; def: number; spa: number; spd: number; spe: number; type1: number; type2: number }
 const MOVES    = movesData    as Record<string, MoveEntry>
 const LEARNSETS = learnsetsData as Record<string, { id: number; level: number }[]>
@@ -253,6 +254,60 @@ const pokemonVisible   = ref(false)
 const trainerAnimClass = ref('')
 const pokemonAnimClass = ref('')
 
+// ── Stat stages (-6 → +6) ─────────────────────────────────────────
+const pStg = reactive({ atk:0, def:0, spa:0, spd:0, acc:0 })  // player
+const eStg = reactive({ atk:0, def:0, spa:0, spd:0, acc:0 })  // enemy
+
+// Gen 1 stage multiplier table
+const STAGE_TBL = [25,28,33,40,50,66,100,150,200,250,300,350,400]
+function stageMult(s: number) { return STAGE_TBL[Math.max(0, Math.min(12, s + 6))] / 100 }
+
+function applyStatChange(who: 'p'|'e', stat: keyof typeof pStg, delta: number) {
+  const stg  = who === 'p' ? pStg : eStg
+  const name = who === 'p' ? playerName.value : `Wild ${enemyName.value}`
+  const old  = stg[stat]
+  stg[stat]  = Math.max(-6, Math.min(6, stg[stat] + delta))
+  if (stg[stat] === old) {
+    log(`${name}'s ${String(stat).toUpperCase()} won't go ${delta > 0 ? 'higher' : 'lower'}!`)
+  } else {
+    const word = Math.abs(delta) >= 2 ? 'sharply ' : ''
+    log(`${name}'s ${String(stat).toUpperCase()} ${delta > 0 ? `${word}rose!` : `${word}fell!`}`)
+  }
+}
+
+// ── Status conditions ─────────────────────────────────────────────
+type Status = 'none'|'par'|'psn'|'tox'|'slp'|'brn'
+const pStatus      = ref<Status>('none')
+const eStatus      = ref<Status>('none')
+const pSleepTurns  = ref(0)
+const eSleepTurns  = ref(0)
+let   toxTurn      = 0   // ramps up each turn for Toxic
+
+function applyStatus(who: 'p'|'e', st: Status) {
+  const cur  = who === 'p' ? pStatus : eStatus
+  const name = who === 'p' ? playerName.value : `Wild ${enemyName.value}`
+  if (cur.value !== 'none') { log(`${name} is already affected!`); return }
+  cur.value = st
+  const msgs: Record<Status, string> = {
+    none:'', par:`${name} is paralyzed!`, psn:`${name} was poisoned!`,
+    tox:`${name} was badly poisoned!`, slp:`${name} fell asleep!`, brn:`${name} was burned!`,
+  }
+  log(msgs[st])
+  if (st === 'slp') {
+    if (who === 'p') pSleepTurns.value = Math.floor(Math.random() * 3) + 1
+    else             eSleepTurns.value = Math.floor(Math.random() * 3) + 1
+  }
+}
+
+// ── Leech Seed ────────────────────────────────────────────────────
+const pSeeded = ref(false)
+const eSeeded = ref(false)
+
+// ── Multi-turn charge state ───────────────────────────────────────
+// >0 = charging (will fire next turn), stores the move index
+const pChargeMoveIdx = ref(-1)  // -1 = not charging
+const eCharging      = ref(false)
+
 // ── Bag / items ────────────────────────────────────────────────────
 const potions  = ref(3)
 const revives  = ref(1)
@@ -294,6 +349,13 @@ const rivalSprite = computed(() => {
   const variant = isEnemyShiny.value ? 'Shiny' : 'Normal'
   return `/textures/Battle/${variant}/Front/Gif/${padId(rivalNum.value)}.gif`
 })
+function onRivalSpriteError(e: Event) {
+  // Shiny sprite missing for this Pokémon — fall back to normal variant
+  const img = e.target as HTMLImageElement
+  if (img.src.includes('/Shiny/')) {
+    img.src = img.src.replace('/Shiny/', '/Normal/')
+  }
+}
 const playerPokemonSprite = computed(() => {
   const variant = isPlayerShiny.value ? 'Shiny' : 'Normal'
   return `/textures/Battle/${variant}/Back/Gif/${padId(active.value?.id ?? 1)}.gif`
@@ -447,7 +509,6 @@ function log(msg: string) {
 }
 
 // ── Damage formula (Gen 1) ────────────────────────────────────────
-// Returns { dmg, effectiveness } so the caller can log type messages.
 function calcDamage(
   atkStat: number, defStat: number, power: number, level: number,
   moveType: number,
@@ -455,10 +516,8 @@ function calcDamage(
   defenderType1: number, defenderType2: number,
 ): { dmg: number; effectiveness: number } {
   if (power === 0) return { dmg: 0, effectiveness: 1 }
-
   const eff  = typeEffectiveness(moveType, defenderType1, defenderType2)
   if (eff === 0) return { dmg: 0, effectiveness: 0 }
-
   const stab = (moveType === attackerType1 || moveType === attackerType2) ? 1.5 : 1
   const base = Math.floor(((2 * level / 5 + 2) * power * atkStat / defStat) / 50) + 2
   const rand = Math.random() * 0.15 + 0.85
@@ -466,9 +525,184 @@ function calcDamage(
   return { dmg, effectiveness: eff }
 }
 
+// ── Move effects ──────────────────────────────────────────────────
+// Returns { skipDamage, overrideDmg } — skipDamage=true for status moves,
+// overrideDmg sets a fixed damage value (Seismic Toss etc.)
+// Also handles drain, leech seed, multi-turn charging, stat changes, status.
+
+const DRAIN_MOVES   = new Set([1, 47, 49, 22])        // Absorb, Leech Life, Mega Drain, Dream Eater
+const CHARGE_MOVES  = new Map([                         // moveId → charge message
+  [17,  'dug underground!'],
+  [33,  'flew up high!'],
+  [62,  'whipped up a whirlwind!'],
+  [68,  'tucked in its head!'],
+  [74,  'took in sunlight!'],
+])
+const LEVEL_DMG_MOVES = new Set([114, 125])             // Night Shade, Seismic Toss
+
+function handleMoveEffect(
+  moveId: number,
+  isPlayer: boolean,
+  dealtDmg: number,                                     // damage already dealt (for drain)
+  hit: boolean,                                         // did the move hit?
+  level: number,
+): { skipDamage: boolean; overrideDmg: number } {
+  const self  = isPlayer ? 'p' : 'e'
+  const opp   = isPlayer ? 'e' : 'p'
+  const selfName = isPlayer ? playerName.value : `Wild ${enemyName.value}`
+  const oppName  = isPlayer ? `Wild ${enemyName.value}` : playerName.value
+
+  // Seismic Toss / Night Shade — damage = user level (handled as override in caller)
+  if (LEVEL_DMG_MOVES.has(moveId)) return { skipDamage: false, overrideDmg: level }
+
+  // Drain moves — restore half damage to attacker
+  if (DRAIN_MOVES.has(moveId) && hit && dealtDmg > 0) {
+    if (moveId === 22) {  // Dream Eater — only works on sleeping target
+      const targetAsleep = isPlayer ? eStatus.value === 'slp' : pStatus.value === 'slp'
+      if (!targetAsleep) { log('It doesn\'t affect the target!'); return { skipDamage: true, overrideDmg: 0 } }
+    }
+    const drain = Math.max(1, Math.floor(dealtDmg / 2))
+    if (isPlayer) { playerHP.value = Math.min(playerMaxHP.value, playerHP.value + drain); if (active.value) active.value.hp = playerHP.value }
+    else          { enemyHP.value  = Math.min(enemyMaxHP.value,  enemyHP.value  + drain) }
+    log(`${selfName} drained ${drain} HP!`)
+    return { skipDamage: false, overrideDmg: 0 }
+  }
+
+  // Stat changes — self
+  const SELF_STAT_UP: Record<number, { stat: keyof typeof pStg; delta: number }> = {
+    103: { stat:'spa', delta: 2 },   // Amnesia
+    104: { stat:'acc', delta: 2 },   // Agility (approximated with acc for now)
+    105: { stat:'atk', delta: 1 },   // Meditate
+    109: { stat:'def', delta: 2 },   // Acid Armor
+    117: { stat:'atk', delta: 2 },   // Swords Dance
+    119: { stat:'def', delta: 1 },   // Harden
+    123: { stat:'def', delta: 1 },   // Withdraw
+    68:  { stat:'def', delta: 1 },   // Skull Bash (raises Def before charging)
+  }
+  if (SELF_STAT_UP[moveId]) {
+    applyStatChange(self, SELF_STAT_UP[moveId].stat, SELF_STAT_UP[moveId].delta)
+    return { skipDamage: true, overrideDmg: 0 }
+  }
+
+  // Stat changes — opponent
+  const OPP_STAT_DN: Record<number, { stat: keyof typeof pStg; delta: number }> = {
+    96:  { stat:'atk', delta: -1 },  // Growl
+    120: { stat:'def', delta: -2 },  // Screech
+    121: { stat:'acc', delta: -1 },  // Sand Attack
+  }
+  if (OPP_STAT_DN[moveId]) {
+    applyStatChange(opp, OPP_STAT_DN[moveId].stat, OPP_STAT_DN[moveId].delta)
+    return { skipDamage: true, overrideDmg: 0 }
+  }
+
+  // Status conditions
+  const STATUS_MOVES: Record<number, Status> = {
+    98:  'slp', 100: 'slp', 102: 'slp',  // sleep
+    99:  'par', 110: 'par',              // paralysis
+    106: 'tox',                          // toxic
+    107: 'psn', 108: 'psn',             // poison
+  }
+  if (STATUS_MOVES[moveId]) {
+    applyStatus(opp, STATUS_MOVES[moveId])
+    return { skipDamage: true, overrideDmg: 0 }
+  }
+
+  // Leech Seed
+  if (moveId === 97) {
+    const seeded = isPlayer ? eSeeded : pSeeded
+    if (seeded.value) { log(`${oppName} is already seeded!`); return { skipDamage: true, overrideDmg: 0 } }
+    seeded.value = true
+    log(`${oppName} was seeded!`)
+    return { skipDamage: true, overrideDmg: 0 }
+  }
+
+  // Recover — restore 50% max HP
+  if (moveId === 118) {
+    const heal = Math.floor((isPlayer ? playerMaxHP.value : enemyMaxHP.value) / 2)
+    if (isPlayer) { playerHP.value = Math.min(playerMaxHP.value, playerHP.value + heal); if (active.value) active.value.hp = playerHP.value }
+    else          { enemyHP.value  = Math.min(enemyMaxHP.value,  enemyHP.value  + heal) }
+    log(`${selfName} recovered ${heal} HP!`)
+    return { skipDamage: true, overrideDmg: 0 }
+  }
+
+  return { skipDamage: false, overrideDmg: 0 }
+}
+
+// ── End-of-turn effects (poison, leech seed, burn) ────────────────
+function endOfTurn() {
+  // Player: poison / toxic
+  if (pStatus.value === 'psn') {
+    const dmg = Math.max(1, Math.floor(playerMaxHP.value / 8))
+    playerHP.value = Math.max(0, playerHP.value - dmg)
+    if (active.value) active.value.hp = playerHP.value
+    log(`${playerName.value} is hurt by poison! (${dmg} dmg)`)
+  } else if (pStatus.value === 'tox') {
+    toxTurn++
+    const dmg = Math.max(1, Math.floor(playerMaxHP.value * toxTurn / 16))
+    playerHP.value = Math.max(0, playerHP.value - dmg)
+    if (active.value) active.value.hp = playerHP.value
+    log(`${playerName.value} is badly hurt by poison! (${dmg} dmg)`)
+  }
+
+  // Player: leech seed drain
+  if (pSeeded.value && playerHP.value > 0) {
+    const drain = Math.max(1, Math.floor(playerMaxHP.value / 8))
+    playerHP.value = Math.max(0, playerHP.value - drain)
+    enemyHP.value  = Math.min(enemyMaxHP.value, enemyHP.value + drain)
+    if (active.value) active.value.hp = playerHP.value
+    log(`${playerName.value}'s HP was sapped by Leech Seed! (${drain} dmg)`)
+  }
+
+  // Enemy: poison / toxic
+  if (eStatus.value === 'psn') {
+    const dmg = Math.max(1, Math.floor(enemyMaxHP.value / 8))
+    enemyHP.value = Math.max(0, enemyHP.value - dmg)
+    log(`Wild ${enemyName.value} is hurt by poison! (${dmg} dmg)`)
+  } else if (eStatus.value === 'tox') {
+    const dmg = Math.max(1, Math.floor(enemyMaxHP.value * toxTurn / 16))
+    enemyHP.value = Math.max(0, enemyHP.value - dmg)
+    log(`Wild ${enemyName.value} is badly hurt by poison! (${dmg} dmg)`)
+  }
+
+  // Enemy: leech seed drain
+  if (eSeeded.value && enemyHP.value > 0) {
+    const drain = Math.max(1, Math.floor(enemyMaxHP.value / 8))
+    enemyHP.value  = Math.max(0, enemyHP.value - drain)
+    playerHP.value = Math.min(playerMaxHP.value, playerHP.value + drain)
+    if (active.value) active.value.hp = playerHP.value
+    log(`Wild ${enemyName.value}'s HP was sapped by Leech Seed! (${drain} dmg)`)
+  }
+}
+
 // ── Enemy turn ────────────────────────────────────────────────────
 function enemyTurn() {
   if (battleOver.value) return
+
+  // Sleep check
+  if (eStatus.value === 'slp') {
+    eSleepTurns.value--
+    if (eSleepTurns.value <= 0) { eStatus.value = 'none'; log(`Wild ${enemyName.value} woke up!`) }
+    else { log(`Wild ${enemyName.value} is fast asleep!`); endOfTurn(); setTimeout(() => { canAct.value = true }, 500); return }
+  }
+  // Paralysis check (25% skip)
+  if (eStatus.value === 'par' && Math.random() < 0.25) {
+    log(`Wild ${enemyName.value} is paralyzed! It can't move!`)
+    endOfTurn(); setTimeout(() => { canAct.value = true }, 500); return
+  }
+
+  // If charging (Dig/Fly etc.), fire now
+  if (eCharging.value) {
+    eCharging.value = false
+    // enemy fires its stored attack — simplified: deal base power dmg
+    const dmg = Math.max(1, Math.floor(enemyLevel.value * 2))
+    playerHP.value = Math.max(0, playerHP.value - dmg)
+    if (active.value) active.value.hp = playerHP.value
+    log(`Wild ${enemyName.value} attacked! Dealt ${dmg} damage.`)
+    endOfTurn()
+    if (playerHP.value <= 0) { handlePlayerFaint(); return }
+    setTimeout(() => { canAct.value = true }, 500); return
+  }
+
   const available = enemyMoves.value.filter(m => m.pp > 0)
   let dmg = 0
 
@@ -477,51 +711,58 @@ function enemyTurn() {
     log(`Wild ${enemyName.value} used Struggle! Dealt ${dmg} damage.`)
   } else {
     const move = available[Math.floor(Math.random() * available.length)]
+    const eSt = isMissingNo.value ? MISSINGNO_STATS : STATS[String(rivalNum.value)]
+    const pSt = STATS[String(active.value?.id ?? 1)]
     move.pp--
-    if (move.entry.power > 0) {
+
+    // Check if charging move
+    if (CHARGE_MOVES.has(move.id ?? 0)) {
+      log(`Wild ${enemyName.value} ${CHARGE_MOVES.get(move.id ?? 0)}`)
+      eCharging.value = true
+      endOfTurn(); setTimeout(() => { canAct.value = true }, 500); return
+    }
+
+    if (move.entry.power > 0 || LEVEL_DMG_MOVES.has(move.id ?? 0)) {
       if (Math.random() * 100 < move.entry.acc) {
-        const eSt = isMissingNo.value ? MISSINGNO_STATS : STATS[String(rivalNum.value)]
-        const pSt = STATS[String(active.value?.id ?? 1)]
         const isPhys = PHYSICAL_TYPES.has(move.entry.type)
-        const atkStat = isPhys ? (eSt?.atk ?? 50) : (eSt?.spa ?? 50)
-        const defStat = isPhys ? (pSt?.def ?? 50) : (pSt?.spd ?? 50)
-        const result = calcDamage(
-          atkStat, defStat, move.entry.power, enemyLevel.value,
-          move.entry.type,
-          eSt?.type1 ?? 1, eSt?.type2 ?? 1,
-          pSt?.type1 ?? 1, pSt?.type2 ?? 1,
-        )
+        const atkMod = stageMult(isPhys ? eStg.atk : eStg.spa)
+        const defMod = stageMult(isPhys ? pStg.def : pStg.spd)
+        const atkStat = Math.floor((isPhys ? (eSt?.atk ?? 50) : (eSt?.spa ?? 50)) * atkMod)
+        const defStat = Math.floor((isPhys ? (pSt?.def ?? 50) : (pSt?.spd ?? 50)) * defMod)
+        const power = LEVEL_DMG_MOVES.has(move.id ?? 0) ? enemyLevel.value : move.entry.power
+        const result = calcDamage(atkStat, defStat, power, enemyLevel.value, move.entry.type,
+          eSt?.type1 ?? 1, eSt?.type2 ?? 1, pSt?.type1 ?? 1, pSt?.type2 ?? 1)
         dmg = result.dmg
         log(`Wild ${enemyName.value} used ${move.entry.name}!${dmg > 0 ? ` Dealt ${dmg} damage.` : ''}`)
-        const effMsg = effectivenessLabel(result.effectiveness)
-        if (effMsg) log(effMsg)
+        if (result.effectiveness !== 1) log(effectivenessLabel(result.effectiveness) ?? '')
+        // drain
+        const { skipDamage } = handleMoveEffect(move.id ?? 0, false, dmg, true, enemyLevel.value)
+        if (skipDamage) dmg = 0
       } else {
         log(`Wild ${enemyName.value} used ${move.entry.name}! It missed!`)
       }
     } else {
       log(`Wild ${enemyName.value} used ${move.entry.name}!`)
+      handleMoveEffect(move.id ?? 0, false, 0, true, enemyLevel.value)
+      dmg = 0
     }
   }
 
   playerHP.value = Math.max(0, playerHP.value - dmg)
   if (active.value) active.value.hp = playerHP.value
+  endOfTurn()
   saveStore.save()
 
-  if (playerHP.value <= 0) {
-    if (active.value) active.value.hp = 0
-    log(`${playerName.value} fainted!`)
-    const hasAlive = saveStore.team.some((s, i) => i > 0 && s.id > 0 && s.hp > 0)
-    if (hasAlive) {
-      forcedSwitch.value = true
-      log('Choose your next Pokémon!')
-    } else {
-      log('You have no more Pokémon! You blacked out!')
-      battleOver.value = true
-      allFainted.value = true
-    }
-    return
-  }
+  if (playerHP.value <= 0) { handlePlayerFaint(); return }
   setTimeout(() => { canAct.value = true }, 500)
+}
+
+function handlePlayerFaint() {
+  if (active.value) active.value.hp = 0
+  log(`${playerName.value} fainted!`)
+  const hasAlive = saveStore.team.some((s, i) => i > 0 && s.id > 0 && s.hp > 0)
+  if (hasAlive) { forcedSwitch.value = true; log('Choose your next Pokémon!') }
+  else { log('You have no more Pokémon! You blacked out!'); battleOver.value = true; allFainted.value = true }
 }
 
 // ── Level-based evolutions (Gen 1) ───────────────────────────────
@@ -629,42 +870,89 @@ function awardXp(base: number) {
 // ── Player uses a move ────────────────────────────────────────────
 async function onMove(i: number) {
   if (!canAct.value || battleOver.value) return
-  const move = playerMoveEntries.value[i]
+
+  // Sleep check
+  if (pStatus.value === 'slp') {
+    pSleepTurns.value--
+    if (pSleepTurns.value <= 0) { pStatus.value = 'none'; log(`${playerName.value} woke up!`) }
+    else { log(`${playerName.value} is fast asleep!`); endOfTurn(); enemyTurn(); return }
+  }
+  // Paralysis (25% skip)
+  if (pStatus.value === 'par' && Math.random() < 0.25) {
+    log(`${playerName.value} is paralyzed! It can't move!`)
+    endOfTurn(); enemyTurn(); return
+  }
+
+  // Multi-turn: firing the charged move
+  const firing = pChargeMoveIdx.value >= 0
+  const moveIdx = firing ? pChargeMoveIdx.value : i
+  const move = playerMoveEntries.value[moveIdx]
   if (!move) return
-  if (movePP.value[i] <= 0) { log('No PP left for that move!'); return }
+  if (!firing && movePP.value[i] <= 0) { log('No PP left for that move!'); return }
 
-  canAct.value = false
-  movePP.value[i]--
-  if (active.value?.moves[i]) active.value.moves[i].pp = movePP.value[i]
+  if (!firing) {
+    canAct.value = false
+    movePP.value[i]--
+    if (active.value?.moves[i]) active.value.moves[i].pp = movePP.value[i]
+  } else {
+    canAct.value = false
+    pChargeMoveIdx.value = -1
+  }
 
-  if (move.power > 0) {
+  // Check for charge move (first turn)
+  if (!firing && CHARGE_MOVES.has(move.id ?? 0)) {
+    log(`${playerName.value} ${CHARGE_MOVES.get(move.id ?? 0)}`)
+    pChargeMoveIdx.value = moveIdx
+    endOfTurn(); enemyTurn(); return
+  }
+
+  const pSt    = STATS[String(active.value?.id ?? 1)]
+  const eSt    = isMissingNo.value ? MISSINGNO_STATS : STATS[String(rivalNum.value)]
+  const moveId = active.value?.moves[moveIdx]?.id ?? 0
+
+  // Check for charge move (first turn)
+  if (!firing && CHARGE_MOVES.has(moveId)) {
+    log(`${playerName.value} ${CHARGE_MOVES.get(moveId)}`)
+    pChargeMoveIdx.value = moveIdx
+    endOfTurn(); enemyTurn(); return
+  }
+
+  // Determine if damaging
+  const isLevelDmg = LEVEL_DMG_MOVES.has(moveId)
+  const hasDamage  = move.power > 0 || isLevelDmg
+
+  if (hasDamage) {
     if (Math.random() * 100 < move.acc) {
-      const pSt = STATS[String(active.value?.id ?? 1)]
-      const eSt = isMissingNo.value ? MISSINGNO_STATS : STATS[String(rivalNum.value)]
       const isPhys = PHYSICAL_TYPES.has(move.type)
-      const atkStat = isPhys ? (pSt?.atk ?? 50) : (pSt?.spa ?? 50)
-      const defStat = isPhys ? (eSt?.def ?? 50) : (eSt?.spd ?? 50)
-      const result = calcDamage(
-        atkStat, defStat, move.power, playerLvl.value,
-        move.type,
-        pSt?.type1 ?? 1, pSt?.type2 ?? 1,
-        eSt?.type1 ?? 1, eSt?.type2 ?? 1,
-      )
-      enemyHP.value = Math.max(0, enemyHP.value - result.dmg)
+      const atkMod  = stageMult(isPhys ? pStg.atk : pStg.spa)
+      const defMod  = stageMult(isPhys ? eStg.def : eStg.spd)
+      const atkStat = Math.floor((isPhys ? (pSt?.atk ?? 50) : (pSt?.spa ?? 50)) * atkMod)
+      const defStat = Math.floor((isPhys ? (eSt?.def ?? 50) : (eSt?.spd ?? 50)) * defMod)
+      const power   = isLevelDmg ? playerLvl.value : move.power
+      const result  = calcDamage(atkStat, defStat, power, playerLvl.value, move.type,
+        pSt?.type1 ?? 1, pSt?.type2 ?? 1, eSt?.type1 ?? 1, eSt?.type2 ?? 1)
       log(`${playerName.value} used ${move.name}!${result.dmg > 0 ? ` Dealt ${result.dmg} damage.` : ''}`)
-      const effMsg = effectivenessLabel(result.effectiveness)
-      if (effMsg) log(effMsg)
+      if (result.effectiveness !== 1) { const em = effectivenessLabel(result.effectiveness); if (em) log(em) }
+      const { overrideDmg } = handleMoveEffect(moveId, true, result.dmg, true, playerLvl.value)
+      const finalDmg = overrideDmg > 0 ? overrideDmg : result.dmg
+      enemyHP.value = Math.max(0, enemyHP.value - finalDmg)
     } else {
       log(`${playerName.value} used ${move.name}! It missed!`)
     }
   } else {
     log(`${playerName.value} used ${move.name}!`)
+    handleMoveEffect(moveId, true, 0, true, playerLvl.value)
   }
 
   if (enemyHP.value <= 0) {
     if (active.value) active.value.hp = playerHP.value
-    const xpBase = Math.floor(enemyLevel.value * 5 + Math.random() * 20)
+    // XP: base species HP stat * level / 7 (closer to Gen 1)
+    const baseHP = isMissingNo.value ? 33 : (STATS[String(rivalNum.value)]?.hp ?? 50)
+    const xpBase = Math.max(1, Math.floor(baseHP * enemyLevel.value / 7))
     awardXp(xpBase)
+    // Reset field effects on enemy faint
+    eSeeded.value = false; eStatus.value = 'none'
+    Object.assign(eStg, { atk:0, def:0, spa:0, spd:0, acc:0 })
 
     // HP bar drains (300ms transition), then faint animation
     await delay(350)
@@ -709,6 +997,9 @@ async function onMove(i: number) {
     return
   }
 
+  // Player turn done — apply end-of-turn effects then enemy acts
+  endOfTurn()
+  if (playerHP.value <= 0) { handlePlayerFaint(); return }
   await delay(800)
   enemyTurn()
 }
@@ -785,10 +1076,9 @@ async function onCatch(ballNum = 23) {
     log(`Gotcha! ${enemyName.value} was caught!`)
     const dexId = isMissingNo.value ? '0' : String(rivalNum.value)
     if (encounter.shiny) {
-      saveStore.shinydex[dexId] = 'caught'
-      saveStore.pokedex[dexId] = 'caught'
+      saveStore.shinydex[dexId] = 'caught'  // shiny catch only marks shinydex
     } else {
-      saveStore.pokedex[dexId] = 'caught'
+      saveStore.pokedex[dexId] = 'caught'   // normal catch only marks pokedex
     }
     const catchXp = Math.floor(enemyLevel.value * 5 + Math.random() * 20)
     awardXp(catchXp)
@@ -856,6 +1146,14 @@ function forceClose() {
 }
 
 onMounted(async () => {
+  // Reset all field effects for fresh battle
+  Object.assign(pStg, { atk:0, def:0, spa:0, spd:0, acc:0 })
+  Object.assign(eStg, { atk:0, def:0, spa:0, spd:0, acc:0 })
+  pStatus.value = 'none'; eStatus.value = 'none'
+  pSeeded.value = false;  eSeeded.value = false
+  pChargeMoveIdx.value = -1; eCharging.value = false
+  toxTurn = 0
+
   const hasAlive = saveStore.team.some(s => s.id > 0 && s.hp > 0)
   if (!hasAlive) {
     battleOver.value = true
@@ -864,22 +1162,17 @@ onMounted(async () => {
     return
   }
 
-  // ── No valid encounter (e.g. direct page reload) ──────────────────
+  // ── MissingNo encounter (number === 0, triggered from surf tiles) ──
   if (encounter.number <= 0 && !encounter.isTrainer) {
-    if (Math.random() < 1 / 5) {
-      // MissingNo. appears!
-      isMissingNo.value    = true
-      missingNoLevel.value = Math.floor(Math.random() * 20) + 80
-      enemyHP.value   = enemyMaxHP.value   // reactive — uses missingNoLevel
-      playerHP.value  = active.value?.hp ?? playerMaxHP.value
-      pickEnemyMoves()
-      loadPlayerMoves()
-      pokemonVisible.value = true
-      log('A wild MissingNo. appeared!!')
-      setTimeout(() => { canAct.value = true }, 600)
-    } else {
-      emit('close')
-    }
+    isMissingNo.value    = true
+    missingNoLevel.value = Math.floor(Math.random() * 20) + 80
+    enemyHP.value   = enemyMaxHP.value   // reactive — uses missingNoLevel
+    playerHP.value  = active.value?.hp ?? playerMaxHP.value
+    pickEnemyMoves()
+    loadPlayerMoves()
+    pokemonVisible.value = true
+    log('A wild MissingNo. appeared!!')
+    setTimeout(() => { canAct.value = true }, 600)
     return
   }
 
@@ -1306,6 +1599,12 @@ main {
   .bag-item-count { font-size: 6px; }
 
   /* ── Move buttons — 2×2 grid with cut inner corners ── */
+  .after-battle-nav {
+    position: relative;
+    bottom: auto; left: auto;
+    width: 100%; height: auto;
+    background: #060e16;
+  }
   .tackle {
     position: relative;
     bottom: auto; left: auto;
@@ -1455,7 +1754,10 @@ main {
 
 /* ── After-battle 2-button nav ── */
 .after-battle-nav {
-  display: flex; gap: 0; width: 100%;
+  display: flex; gap: 0;
+  position: absolute; bottom: 0; left: 0;
+  width: 500px; height: 151px;
+  background: #060e16;
 }
 .abn-btn {
   flex: 1; padding: 18px 0;

@@ -20,11 +20,11 @@
         <i class="fa-solid fa-computer"></i>
         <span>PC</span>
       </RouterLink>
-      <RouterLink to="/save" class="hnav-item" title="Save">
-        <i class="fa-solid fa-gear"></i>
-        <span>SAVE</span>
-      </RouterLink>
     </template>
+    <RouterLink to="/save" class="hnav-item" title="Settings">
+      <i class="fa-solid fa-gear"></i>
+      <span>SAVE</span>
+    </RouterLink>
     <button id="logout-btn" @click="$emit('navClick')" title="Logout">
       <i class="fa-solid fa-right-from-bracket"></i>
     </button>

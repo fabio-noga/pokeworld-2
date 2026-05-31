@@ -6,8 +6,10 @@
       <span class="pc-title">BILL'S PC</span>
       <span class="pc-sub">BOX 1</span>
       <span class="blink">▮</span>
-      <button class="pc-close-btn pc-fs-btn" @click="openFullscreen" @pointerdown.stop title="Fullscreen">⛶</button>
-      <button class="pc-close-btn" @click="$emit('close')" @pointerdown.stop title="Close">✕</button>
+      <div class="pc-header-actions" @pointerdown.stop>
+        <button class="pc-close-btn" @click="openFullscreen" title="Fullscreen">⛶</button>
+        <button class="pc-close-btn" @click="$emit('close')" title="Close">✕</button>
+      </div>
     </div>
 
     <div class="pc-layout">
@@ -17,6 +19,13 @@
 
         <!-- Filter bar -->
         <div class="filter-bar">
+          <input
+            v-model="searchQuery"
+            class="pc-search"
+            type="text"
+            placeholder="Search name, #, nickname…"
+            @pointerdown.stop
+          />
           <div class="filter-types">
             <button
               v-for="(name, tid) in TYPE_NAMES" :key="tid"
@@ -49,6 +58,7 @@
                 class="poke-card"
                 :class="{ 'card-dragging': dragSrc === `pc-${cell - 1}` }"
                 draggable="true"
+                @click="openSlotInfo(saveStore.pc[cell - 1], -(cell))"
                 @dragstart="onDragStart('pc', cell - 1)"
                 @dragend="dragSrc = ''; dragOver = ''"
               >
@@ -108,6 +118,7 @@
             :class="{ 'slot-empty': !slot.id, 'slot-drop': dragOver === `team-${i}`, 'slot-dragging': dragSrc === `team-${i}` }"
             :style="slot.id ? slotBorder(slot.id) : {}"
             :draggable="!!slot.id"
+            @click="slot.id ? openSlotInfo(slot, i) : undefined"
             @dragstart="slot.id ? onDragStart('team', i) : undefined"
             @dragover.prevent="dragOver = `team-${i}`"
             @dragleave="dragOver = ''"
@@ -130,7 +141,12 @@
                   <div class="slot-xp-bar"><div class="slot-xp-fill" :style="{ width: xpPct(slot) * 100 + '%' }"></div></div>
                 </div>
               </div>
-              <button class="gear-btn" @click.stop="openMoveEditor(slot, 'team', i)" title="Manage"><i class="fa-solid fa-gear"></i></button>
+              <!-- Reorder arrows + gear -->
+              <div class="slot-actions" @click.stop>
+                <button class="slot-arrow" :disabled="i === 0 || !saveStore.team[i-1].id" @click.stop="moveTeamSlot(i, 'up')" title="Move up">▲</button>
+                <button class="slot-arrow" :disabled="i >= saveStore.team.length - 1 || !saveStore.team[i+1].id" @click.stop="moveTeamSlot(i, 'down')" title="Move down">▼</button>
+                <button class="gear-btn" @click.stop="openMoveEditor(slot, 'team', i)" title="Manage"><i class="fa-solid fa-gear"></i></button>
+              </div>
             </template>
             <template v-else>
               <div class="slot-empty-label">— EMPTY —</div>
@@ -140,6 +156,15 @@
         <div class="party-count">{{ activeTeam.length }}/6</div>
       </div>
     </div>
+
+    <!-- Party slot info modal -->
+    <PokemonInfoModal
+      v-if="infoSlot"
+      :slot="infoSlot"
+      @close="infoSlot = null"
+      @evolve="evolveInfoSlot"
+      @evolve-special="evolveInfoSlotTo"
+    />
 
     <!-- Tip -->
     <div class="pc-tip">
@@ -232,6 +257,8 @@ import { pokedex, padId } from '../data/pokemon'
 import statsData from '../data/pokemon-stats.json'
 import movesData from '../data/moves.json'
 import learnsetsData from '../data/learnsets.json'
+import PokemonInfoModal from './PokemonInfoModal.vue'
+import type { TeamSlot } from '../stores/save'
 
 const emit = defineEmits<{ close: [] }>()
 const modalStore = useModalStore()
@@ -259,9 +286,61 @@ function onKey(e: KeyboardEvent) { if (e.key === 'Escape') emit('close') }
 const pcCells = computed(() => Math.max(5, saveStore.pc.filter(p => p?.id).length + 4))
 const activeTeam = computed(() => saveStore.team.filter(s => s.id > 0))
 
+// ── Party slot info + reorder ─────────────────────────────────────
+const infoSlot      = ref<TeamSlot | null>(null)
+const infoSlotIndex = ref(-1)
+
+function openSlotInfo(slot: TeamSlot, index: number) {
+  infoSlot.value      = { ...slot }
+  infoSlotIndex.value = index  // negative = PC slot (no evolve from here)
+}
+
+function applyTeamEvolve(idx: number, toId: number) {
+  let isShiny = false
+  if (idx >= 0) {
+    const old = saveStore.team[idx]
+    if (!old) return
+    isShiny = !!old.shiny
+    saveStore.team.splice(idx, 1, { ...old, id: toId, pendingEvo: undefined })
+  } else {
+    const pcIdx = -idx - 1
+    const old = saveStore.pc[pcIdx]
+    if (!old) return
+    isShiny = !!old.shiny
+    saveStore.pc.splice(pcIdx, 1, { ...old, id: toId, pendingEvo: undefined })
+  }
+  if (isShiny) saveStore.shinydex[String(toId)] = 'caught'
+  else         saveStore.pokedex[String(toId)]  = 'caught'
+  saveStore.save()
+  infoSlot.value = null
+}
+
+function evolveInfoSlot() {
+  const idx = infoSlotIndex.value
+  const slot = idx >= 0 ? saveStore.team[idx] : saveStore.pc[-idx - 1]
+  if (!slot?.pendingEvo) return
+  applyTeamEvolve(idx, slot.pendingEvo)
+}
+
+function evolveInfoSlotTo(toId: number) {
+  applyTeamEvolve(infoSlotIndex.value, toId)
+}
+
+function moveTeamSlot(fromIdx: number, direction: 'up' | 'down') {
+  const toIdx = direction === 'up' ? fromIdx - 1 : fromIdx + 1
+  if (toIdx < 0 || toIdx >= saveStore.team.length) return
+  const team = saveStore.team
+  const a = { ...team[fromIdx] }
+  const b = { ...team[toIdx] }
+  team[fromIdx] = { ...b, slot: fromIdx + 1 }
+  team[toIdx]   = { ...a, slot: toIdx + 1 }
+  saveStore.save()
+}
+
 // ── Filters ───────────────────────────────────────────────────────
-const filterTypes = ref<number[]>([])
-const filterShiny = ref<null | true | false>(null)   // null=all, true=shiny, false=normal
+const filterTypes  = ref<number[]>([])
+const filterShiny  = ref<null | true | false>(null)   // null=all, true=shiny, false=normal
+const searchQuery  = ref('')
 
 function toggleTypeFilter(t: number) {
   const i = filterTypes.value.indexOf(t)
@@ -271,6 +350,13 @@ function toggleTypeFilter(t: number) {
 
 function cardVisible(slot: any): boolean {
   if (!slot?.id) return true   // keep empty cells always visible
+  if (searchQuery.value.trim()) {
+    const q    = searchQuery.value.trim().toLowerCase()
+    const name = pokedex(slot.id).toLowerCase()
+    const num  = String(slot.id)
+    const nick = (slot.nickname ?? '').toLowerCase()
+    if (!name.includes(q) && !num.includes(q) && !nick.includes(q)) return false
+  }
   if (filterTypes.value.length) {
     const types = getTypes(slot.id)
     if (!filterTypes.value.some(t => types.includes(t))) return false
@@ -369,7 +455,8 @@ function onDropToTeam(ti:number) {
 .pc-sub    { font-size:7px; color:#ffc8c8; letter-spacing:1px; }
 .blink     { font-size:14px; color:#fff; animation:blink-cur 1s step-end infinite; }
 @keyframes blink-cur { 0%,100%{opacity:1}50%{opacity:0} }
-.pc-close-btn { margin-left:auto; font-family:'Press Start 2P',monospace; font-size:10px; background:rgba(255,255,255,0.15); border:2px solid rgba(255,255,255,0.35); color:#fff; width:28px; height:28px; border-radius:2px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background 0.15s; }
+.pc-header-actions { margin-left:auto; display:flex; gap:6px; flex-shrink:0; }
+.pc-close-btn { font-family:'Press Start 2P',monospace; font-size:10px; background:rgba(255,255,255,0.15); border:2px solid rgba(255,255,255,0.35); color:#fff; width:28px; height:28px; border-radius:2px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background 0.15s; }
 .pc-close-btn:hover { background:rgba(255,255,255,0.3); }
 
 .pc-layout { display:flex; gap:10px; align-items:flex-start; padding: 12px 12px 18px; }
@@ -378,6 +465,9 @@ function onDropToTeam(ti:number) {
 
 /* ── Filter bar ── */
 .filter-bar { padding: 6px 8px; background: #e0eef8; border-bottom: 2px solid #b0cce0; display: flex; flex-direction: column; gap: 5px; }
+.pc-search { width: 100%; box-sizing: border-box; padding: 4px 7px; font-family: 'Press Start 2P', monospace; font-size: 7px; background: #fff; border: 2px solid #b0cce0; color: #1a2a3a; outline: none; }
+.pc-search::placeholder { color: #8aabcc; }
+.pc-search:focus { border-color: #c82020; }
 .filter-types { display: flex; flex-wrap: wrap; gap: 3px; }
 .ftype-chip {
   font-family: 'Press Start 2P', monospace;
@@ -435,7 +525,8 @@ function onDropToTeam(ti:number) {
 .xpshare-toggle { font-family:'Press Start 2P',monospace; font-size:6px; padding:4px 8px; border-radius:2px; border:2px solid #a0c0d8; background:#dceef8; color:#4060a0; cursor:pointer; }
 .xpshare-toggle.active { background:#fff4d8; color:#8a4800; border-color:#c08020; }
 .team-list { padding:6px; display:flex; flex-direction:column; gap:4px; }
-.team-slot { background:#fff; border:2px solid #b8d4e8; border-left-width:4px; border-radius:3px; height:52px; display:flex; align-items:center; gap:6px; padding:4px 6px; cursor:grab; position:relative; overflow:hidden; transition:border-color 0.15s; }
+.team-slot { background:#fff; border:2px solid #b8d4e8; border-left-width:4px; border-radius:3px; height:52px; display:flex; align-items:center; gap:6px; padding:4px 6px; cursor:grab; position:relative; overflow:hidden; transition:border-color 0.15s, background 0.1s; }
+.team-slot:not(.slot-empty):hover { background:#f0f7ff; }
 .team-slot.slot-dragging { opacity:0.3; }
 .team-slot.slot-drop { border-color:#c82020 !important; }
 .team-slot.slot-empty { cursor:default; opacity:0.4; border-left-color:#b8d4e8 !important; justify-content:center; }
@@ -451,6 +542,11 @@ function onDropToTeam(ti:number) {
 .slot-empty-label { font-family:'Press Start 2P',monospace; font-size:5px; color:#a0c0d8; }
 .party-count { font-family:'VT323',monospace; font-size:14px; color:#4060a0; padding:4px 10px; border-top:2px solid #b8d4e8; text-align:center; background:#f0f8ff; }
 
+.slot-actions { display:flex; flex-direction:column; align-items:center; gap:2px; flex-shrink:0; margin-left:auto; }
+.slot-arrow { display:none; background:none; border:1px solid #b0b8c8; border-radius:2px; width:18px; height:16px; font-size:8px; cursor:pointer; align-items:center; justify-content:center; color:#4a6080; transition:background 0.1s; padding:0; }
+.slot-arrow:hover:not(:disabled) { background:#dce8f0; color:#1a3050; }
+.slot-arrow:disabled { opacity:0.25; cursor:default; }
+@media (max-width: 600px) { .slot-arrow { display:flex; } }
 .gear-btn { font-size:16px; background:none; border:none; padding:0; width:20px; height:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform 0.15s; }
 .gear-btn i { background:linear-gradient(160deg,#7090b0,#2848a8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
 .gear-btn:hover { transform:rotate(30deg); }

@@ -341,7 +341,7 @@ async function fetchPrivateRoomAssignment(key: string): Promise<{ action: string
     const res = await fetch(`${base}/room/join-private`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key }),
+      body: JSON.stringify({ key: key.toUpperCase() }),
       signal: AbortSignal.timeout(3000),
     })
     if (!res.ok) return null
@@ -498,9 +498,10 @@ function joinPrivateAsGuest(
   })
 }
 
-// ── Public: join a private room by 5-digit key ────────────────────────────────
+// ── Public: join a private room by 5-char alphanumeric key ───────────────────
 
 export async function joinPrivateRoom(key: string, myInfo: PlayerInfo): Promise<void> {
+  key = key.toUpperCase()
   if (isOnline.value) disconnect()
   _myInfo = myInfo
   statusMsg.value = 'Connecting…'

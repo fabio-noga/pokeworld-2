@@ -19,6 +19,7 @@
   <!-- Player layer -->
   <div class="player-wrap">
     <div class="player" :style="playerStyle">
+      <div v-if="mp.isOnline.value" class="player-nametag">{{ saveStore.playerData.nome }}</div>
       <img id="PlayerImg" :src="playerSprite" alt="" style="width:55px" />
     </div>
   </div>
@@ -99,32 +100,29 @@
     </div>
   </div>
 
-  <!-- Wild encounter HUD (TrackerBush) -->
+  <!-- Wild encounter HUD -->
   <div id="TrackerBush" :style="{ visibility: tracker.visible ? 'visible' : 'hidden' }">
-    <div class="tracker-body">
-      <!-- Left: Pokémon image -->
-      <div class="trackerdiv">
-        <img v-if="tracker.img" id="trackerimg" :src="tracker.img" />
-      </div>
-      <!-- Right: info + catch ball -->
-      <div class="tracker-info">
-        <h3 id="trackername">
-          <b>{{ tracker.shiny ? '✨ ' : '' }}{{ tracker.name }}</b>
-          <!-- Normal caught → regular ball -->
+    <!-- Pokémon sprite — top-right cut corner -->
+    <div class="trk-sprite-wrap">
+      <img v-if="tracker.img" :src="tracker.img" class="trk-sprite" :class="{ 'trk-shiny': tracker.shiny }" />
+    </div>
+    <!-- Info + fight — top-left cut corner -->
+    <div class="trk-info">
+      <div class="trk-name-row">
+        <span v-if="tracker.shiny" class="trk-shiny-star">✨</span>
+        <span class="trk-name">{{ tracker.name }}</span>
+        <span class="trk-caught-icons">
           <img v-if="saveStore.pokedex[String(tracker.number)] === 'caught'"
-               src="/textures/HUD/Pokeball.png" class="tracker-name-ball"
-               title="Normal caught" />
-          <!-- Shiny caught → golden ball -->
+               src="/sprites/ui/Pokeball.png" class="trk-caught-ball" title="Caught" />
           <img v-if="saveStore.shinydex[String(tracker.number)] === 'caught'"
-               src="/textures/HUD/Pokeball.png" class="tracker-name-ball tracker-name-ball--shiny"
-               title="Shiny caught" />
-        </h3>
-        <p id="trackerlvl">Nível {{ tracker.level }}</p>
-        <div class="tracker-status">
-          <span v-if="!saveStore.pokedex[String(tracker.number)]" class="tracker-new">Novo!</span>
-        </div>
-        <img src="/textures/HUD/Pokeball.png" class="tracker-ball" @click="startBattle" />
+               src="/sprites/ui/Pokeball.png" class="trk-caught-ball trk-caught-shiny" title="Shiny caught" />
+        </span>
       </div>
+      <div class="trk-lv">Lv.{{ tracker.level }}</div>
+      <button class="trk-fight-btn" @click="startBattle">
+        <img src="/sprites/ui/battle.png" class="trk-fight-icon" />
+        FIGHT
+      </button>
     </div>
   </div>
 
@@ -133,14 +131,12 @@
     <div v-if="mp.toastMsg.value" class="mp-toast">{{ mp.toastMsg.value }}</div>
   </Transition>
 
-  <!-- Multiplayer opt-in — shown once after first-run or on first game load -->
-  <MultiplayerOptInModal v-if="showMpOptIn" @choose="onMpOptIn" />
-
-  <!-- First-run modal — name + starter selection for new players -->
-  <FirstRunModal
-    v-if="showFirstRun"
+  <!-- Intro modal — Oak-themed, handles name/starter + online opt-in -->
+  <IntroModal
+    v-if="showIntro"
     :initial-name="saveStore.playerData.nome !== 'Player' ? saveStore.playerData.nome : ''"
-    @confirm="onFirstRun"
+    :online-only="introOnlineOnly"
+    @done="onIntroDone"
   />
 
   <!-- Multiplayer modal -->
@@ -181,7 +177,7 @@
              @dragend="dragFrom = -1; dragOver = -1">
 
           <!-- Pokéball sits at the cut corner, outside the clipped card -->
-          <img src="/textures/HUD/Pokeball.png" class="slot-ball" alt="" />
+          <img src="/sprites/ui/Pokeball.png" class="slot-ball" alt="" />
 
           <!-- Inner card: clipped to diamond-corner shape -->
           <div class="slot-entry">
@@ -244,6 +240,7 @@
     :slot="inspectedSlot"
     @close="inspectedSlot = null"
     @evolve="evolveInspectedSlot"
+    @evolve-special="evolveInspectedSlotTo"
   />
 
   <!-- Mobile party strip — circular icons with HP ring (left side) -->
@@ -287,8 +284,7 @@ import QuickMenu from '../components/QuickMenu.vue'
 import VirtualJoystick from '../components/VirtualJoystick.vue'
 import PokemonInfoModal from '../components/PokemonInfoModal.vue'
 import MultiplayerModal from '../components/MultiplayerModal.vue'
-import MultiplayerOptInModal from '../components/MultiplayerOptInModal.vue'
-import FirstRunModal from '../components/FirstRunModal.vue'
+import IntroModal from '../components/IntroModal.vue'
 import { useAuthStore } from '../stores/auth'
 import { useSaveStore } from '../stores/save'
 import { useModalStore } from '../stores/modals'
@@ -310,8 +306,8 @@ const mpStore = useMultiplayerStore()
 
 // ── Multiplayer UI ───────────────────────────────────────────────
 const showMpModal   = ref(false)
-const showFirstRun  = ref(false)
-const showMpOptIn   = ref(false)
+const showIntro        = ref(false)
+const introOnlineOnly  = ref(false)
 const currentDir    = ref<Direction>('down')
 // Sprite frames per direction: idle and walking
 const idleFrames: Record<Direction, number> = { down: 1, up: 10, left: 4, right: 7 }
@@ -415,23 +411,37 @@ function openSlotInfo(slot: TeamSlot, index: number) {
   }
 }
 
+function applyEvolve(idx: number, toId: number) {
+  const old = saveStore.team[idx]
+  if (!old) return
+  const oldMax = calcMaxHP(STATS[String(old.id)]?.hp ?? 45, old.lvl)
+  const newMax = calcMaxHP(STATS[String(toId)]?.hp ?? 45, old.lvl)
+  const newSlot = {
+    ...old,
+    id: toId,
+    hp: Math.min(old.hp + Math.max(0, newMax - oldMax), newMax),
+    pendingEvo: undefined,
+  }
+  saveStore.team.splice(idx, 1, newSlot)
+  if (old.shiny) saveStore.shinydex[String(toId)] = 'caught'
+  else           saveStore.pokedex[String(toId)]  = 'caught'
+  saveStore.save()
+  inspectedSlot.value = null
+  if (idx === 0) broadcastFollower(toId, saveStore.shinydex?.[String(toId)] === 'caught')
+}
+
 function evolveInspectedSlot() {
   const idx = inspectedSlotIndex.value
   if (idx < 0) return
   const slot = saveStore.team[idx]
   if (!slot?.pendingEvo) return
-  const oldMax = calcMaxHP(STATS[String(slot.id)]?.hp ?? 45, slot.lvl)
-  slot.id = slot.pendingEvo
-  const newMax = calcMaxHP(STATS[String(slot.id)]?.hp ?? 45, slot.lvl)
-  slot.hp = Math.min(slot.hp + Math.max(0, newMax - oldMax), newMax)
-  slot.pendingEvo = undefined
-  saveStore.pokedex[String(slot.id)] = 'caught'
-  saveStore.save()
-  inspectedSlot.value = null
-  // Broadcast follower change if the evolved Pokémon is in slot 0
-  if (idx === 0) {
-    broadcastFollower(slot.id, saveStore.shinydex?.[String(slot.id)] === 'caught')
-  }
+  applyEvolve(idx, slot.pendingEvo)
+}
+
+function evolveInspectedSlotTo(toId: number) {
+  const idx = inspectedSlotIndex.value
+  if (idx < 0) return
+  applyEvolve(idx, toId)
 }
 
 // ── NPC walk-to state ─────────────────────────────────────────────
@@ -474,6 +484,14 @@ function otherPlayerTileStyle(tile: number) {
 
 watch(adjacentNpcId, (id) => {
   activeBubble.value = id ? (npcs.find(n => n.id === id) ?? null) : null
+})
+
+// When battle overlay closes, hide the encounter tracker so player can't re-enter the same battle
+watch(() => modalStore.battleOpen, (open) => {
+  if (!open) {
+    tracker.visible = false
+    saveStore.encounter.number = 0
+  }
 })
 
 // Start / stop fishing cycle when player enters or leaves tile 9
@@ -700,7 +718,7 @@ function triggerEncounter(num: number) {
   tracker.number = num
   tracker.level = lvl
   tracker.name = pokedex(num)
-  tracker.img = `/textures/Art/${padId(num)}.png`
+  tracker.img = `/textures/Battle/${isShiny ? 'Shiny' : 'Normal'}/Front/Png/${num}.png`
   tracker.visible = true
   tracker.shiny = isShiny
   saveStore.encounter.isTrainer   = false
@@ -708,9 +726,7 @@ function triggerEncounter(num: number) {
   saveStore.encounter.number = num
   saveStore.encounter.level  = lvl
   saveStore.encounter.shiny  = isShiny
-  const id = String(num)
-  if (saveStore.pokedex[id] !== 'caught') saveStore.pokedex[id] = 'seen'
-  if (isShiny && saveStore.shinydex[id] !== 'caught') saveStore.shinydex[id] = 'seen'
+  // 'seen' is only recorded when the battle actually starts (BattleView onMounted)
   saveStore.save()
 }
 
@@ -725,8 +741,20 @@ function checkBattle() {
     } else { tracker.visible = false }
 
   } else if (tile === 2) {
-    // Water — only water-type Pokémon, 1-in-3 chance
-    if (Math.floor(Math.random() * 3) === 0) {
+    // Water — check for MissingNo first, then regular water Pokémon
+    const seenCt   = Object.values(saveStore.pokedex).filter(v => v === 'seen' || v === 'caught').length
+    const caughtCt = Object.values(saveStore.pokedex).filter(v => v === 'caught').length
+    const missingNoChance = caughtCt >= 151 ? 1/5 : seenCt >= 151 ? 1/50 : seenCt >= 76 ? 1/500 : 0
+
+    if (missingNoChance > 0 && Math.random() < missingNoChance) {
+      // MissingNo encounter — skip tracker, go straight to battle
+      saveStore.encounter.number      = 0
+      saveStore.encounter.isTrainer   = false
+      saveStore.encounter.trainerTeam = []
+      saveStore.encounter.shiny       = false
+      tracker.visible = false
+      modalStore.openBattle()
+    } else if (Math.floor(Math.random() * 3) === 0) {
       triggerEncounter(WATER_POKEMON[Math.floor(Math.random() * WATER_POKEMON.length)])
     } else { tracker.visible = false }
 
@@ -976,11 +1004,20 @@ async function doLogout() {
 }
 
 // ── Multiplayer helpers ───────────────────────────────────────────
-function onMpOptIn(enabled: boolean) {
-  showMpOptIn.value = false
-  saveStore.multiplayerEnabled = enabled
+function onIntroDone({ name, starterId, online }: { name: string; starterId: number; online: boolean }) {
+  showIntro.value = false
+  if (!introOnlineOnly.value) {
+    const isNew = !saveStore.hasSave()
+    if (isNew) {
+      saveStore.initNewGame(name, saveStore.playerData.sprite, starterId)
+    } else {
+      saveStore.playerData.nome = name
+      saveStore.save()
+    }
+  }
+  saveStore.multiplayerEnabled = online
   saveStore.save()
-  if (enabled) doAutoConnect()
+  if (online) doAutoConnect()
 }
 
 async function doAutoConnect() {
@@ -1001,18 +1038,6 @@ async function doAutoConnect() {
   }
 }
 
-function onFirstRun({ name, starterId }: { name: string; starterId: number }) {
-  showFirstRun.value = false
-  const isNew = !saveStore.hasSave()
-  if (isNew) {
-    saveStore.initNewGame(name, saveStore.playerData.sprite, starterId)
-  } else {
-    saveStore.playerData.nome = name
-    saveStore.save()
-  }
-  // Always ask about multiplayer after first-run setup
-  showMpOptIn.value = true
-}
 
 // ── Healing & team management ─────────────────────────────────────
 function calcMaxHP(baseHP: number, level: number) {
@@ -1111,30 +1136,7 @@ onMounted(() => {
   middle.left = je / 2 - 50.5 + 3.5 - 8
 
   // Restore pet position + sprite based on saved facing direction
-  // facingFrame: 1=down, 4=left, 7=right, 10=up
-  if (facingFrame === 10) {
-    // UP — pet is behind (above) player, higher z-index
-    petPosition1 = 7
-    petPos.top = playerCenter.top + TILE_SIZE + 4
-    petPos.left = middle.left
-    pet1ZIndex.value = 2
-  } else if (facingFrame === 4) {
-    // LEFT — pet is to the right of player
-    petPosition1 = 3
-    petPos.top = middle.top + 30
-    petPos.left = middle.left + 38
-  } else if (facingFrame === 7) {
-    // RIGHT — pet is to the left of player
-    petPosition1 = 5
-    petPos.top = middle.top + 30
-    petPos.left = middle.left - 38
-  } else {
-    // DOWN (default)
-    petPosition1 = 1
-    petPos.top = playerCenter.top - TILE_SIZE + 16
-    petPos.left = middle.left
-    pet1ZIndex.value = 0
-  }
+  recalcPetPos()
 
   // Initial sprites — restore saved facing direction
   setPlayerSprite(facingFrame)
@@ -1146,14 +1148,17 @@ onMounted(() => {
   // Mobile pad visibility
   if (window.innerWidth < 980) padVisible.value = true
 
-  // Keydown listener
+  // Keydown + resize listeners
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('resize', handleResize)
 
-  // Multiplayer — new player gets first-run modal; existing players check opt-in setting
+  // Multiplayer — new player gets full intro; existing players get online-only question
   if (isFirstSession()) {
-    showFirstRun.value = true
+    introOnlineOnly.value = false
+    showIntro.value = true
   } else if (saveStore.multiplayerEnabled === null) {
-    showMpOptIn.value = true
+    introOnlineOnly.value = true
+    showIntro.value = true
   } else if (saveStore.multiplayerEnabled === true) {
     doAutoConnect()
   }
@@ -1171,8 +1176,49 @@ onMounted(() => {
   }, 500)
 })
 
+// facingFrame: 1=down, 4=left, 7=right, 10=up
+function recalcPetPos() {
+  if (facingFrame === 10) {
+    petPosition1 = 7
+    petPos.top = playerCenter.top + TILE_SIZE + 4
+    petPos.left = middle.left
+    pet1ZIndex.value = 2
+  } else if (facingFrame === 4) {
+    petPosition1 = 3
+    petPos.top = middle.top + 30
+    petPos.left = middle.left + 38
+  } else if (facingFrame === 7) {
+    petPosition1 = 5
+    petPos.top = middle.top + 30
+    petPos.left = middle.left - 38
+  } else {
+    petPosition1 = 1
+    petPos.top = playerCenter.top - TILE_SIZE + 16
+    petPos.left = middle.left
+    pet1ZIndex.value = 0
+  }
+}
+
+function handleResize() {
+  const ji = window.innerHeight
+  const je = window.innerWidth
+  playerCenter.top  = ji / 2 - 78
+  playerCenter.left = je / 2 - 50.5
+  middle.top  = ji / 2 - 78 - 10 - 8
+  middle.left = je / 2 - 50.5 + 3.5 - 8
+  const SPAWN = 468
+  const defaultRow = Math.floor((SPAWN - 1) / MAP_WIDTH)
+  const defaultCol  = (SPAWN - 1) % MAP_WIDTH
+  const curRow = Math.floor((playerPosition - 1) / MAP_WIDTH)
+  const curCol  = (playerPosition - 1) % MAP_WIDTH
+  mapOffset.y = ji / 2 - 960 - (curRow - defaultRow) * TILE_SIZE
+  mapOffset.x = je / 2 - 577.5 - (curCol - defaultCol) * TILE_SIZE
+  recalcPetPos()
+}
+
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('resize', handleResize)
   clearInterval(petInterval)
   stopPad()
   stopFishingCycle()
@@ -1224,67 +1270,100 @@ onUnmounted(() => {
   image-rendering: pixelated;
 }
 
-/* TrackerBush — centered bottom, image left + ball right */
+/* ── Wild encounter panel — top-left + bottom-right cuts ── */
 #TrackerBush {
   position: fixed;
-  bottom: 0;
-  left: 50%;
+  bottom: 16px; left: 50%;
   transform: translateX(-50%);
-  z-index: 600;                        /* above joystick (490) */
-  background: #333;
-  border: 3px solid #000;
-  border-bottom: none;
-  border-radius: 12px 12px 0 0;
-  color: white;
-  padding: 10px 14px 12px;
-  min-width: 280px;
-}
-.tracker-body {
+  z-index: 600;
   display: flex;
-  align-items: center;
-  gap: 14px;
+  align-items: stretch;
+  /* unified cut-corner shape */
+  clip-path: polygon(24px 0, 100% 0, 100% calc(100% - 24px), calc(100% - 24px) 100%, 0 100%, 0 24px);
+  filter: drop-shadow(0 4px 20px rgba(0,0,0,0.7));
+  min-width: 260px;
+  max-width: 360px;
+  width: max-content;
 }
-.trackerdiv {
-  width: 110px;
-  height: 110px;
-  border: 3px solid black;
+
+/* Sprite panel */
+.trk-sprite-wrap {
+  width: 96px;
   flex-shrink: 0;
-  border-radius: 50%;
-  overflow: hidden;
-  background-color: white;
+  display: flex; align-items: center; justify-content: center;
+  padding: 14px 10px;
+  background: linear-gradient(160deg, #2a2a38 0%, #16161e 100%);
+  border-right: 2px solid #3a3a50;
 }
-.trackerdiv > img { width: 100%; height: 100%; object-fit: cover; }
-.tracker-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  flex: 1;
-}
-#trackername { margin: 0; padding: 0; font-size: 13px; }
-#trackerlvl  { margin: 0; padding: 0; font-size: 11px; color: #ccc; }
-.tracker-ball {
-  width: 54px;
-  cursor: pointer;
-  opacity: 0.85;
-  margin-top: 6px;
-  transition: transform 0.1s, opacity 0.1s;
-}
-.tracker-ball:hover { opacity: 1; transform: scale(1.12); }
-.tracker-status { font-size: 11px; font-weight: bold; }
-.tracker-name-ball {
-  width: 14px;
-  height: 14px;
+.trk-sprite {
+  width: 76px; height: 76px;
+  object-fit: contain;
   image-rendering: pixelated;
-  vertical-align: middle;
-  margin-left: 5px;
-  opacity: 0.9;
 }
-.tracker-name-ball--shiny {
-  filter: sepia(1) saturate(4) hue-rotate(10deg) brightness(1.3);  /* golden tint */
+.trk-sprite.trk-shiny {
+  filter: drop-shadow(0 0 8px rgba(255,220,50,0.85));
 }
-.tracker-seen { color: #aaa; }
-.tracker-new { color: #22cc66; }
+
+/* Info panel — top-left accent line via gradient */
+.trk-info {
+  flex: 1;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 7px;
+  padding: 14px 20px 16px 14px;
+  background:
+    /* top-left diagonal accent line */
+    linear-gradient(135deg,
+      transparent  22px,
+      #4a4a62      22px,
+      #4a4a62      24px,
+      transparent  24px
+    ),
+    /* bottom-right diagonal accent line */
+    linear-gradient(315deg,
+      transparent  22px,
+      #4a4a62      22px,
+      #4a4a62      24px,
+      transparent  24px
+    ),
+    linear-gradient(160deg, #2e2e42 0%, #1a1a26 100%);
+}
+.trk-name-row {
+  display: flex; align-items: center; gap: 5px;
+  padding-left: 10px;
+}
+.trk-name {
+  font-family: 'Pokemon GB', 'Press Start 2P', monospace;
+  font-size: 11px; color: #dde0f0;
+}
+.trk-shiny-star { font-size: 12px; }
+.trk-caught-icons { display: flex; gap: 3px; margin-left: 2px; }
+.trk-caught-ball { width: 13px; height: 13px; image-rendering: pixelated; opacity: 0.85; }
+.trk-caught-shiny { filter: sepia(1) saturate(4) hue-rotate(10deg) brightness(1.3); }
+
+.trk-lv {
+  font-family: 'Pokemon GB', 'Press Start 2P', monospace;
+  font-size: 8px; color: #7070a0;
+  padding-left: 10px;
+}
+
+/* Fight button — small cut on top-left */
+.trk-fight-btn {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 4px; margin-left: 10px;
+  padding: 7px 16px 7px 14px;
+  background: linear-gradient(135deg, #3a4870 0%, #28305a 100%);
+  border: none;
+  clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px);
+  font-family: 'Pokemon GB', 'Press Start 2P', monospace;
+  font-size: 9px; font-weight: bold;
+  color: #c8d4ff; letter-spacing: 1px;
+  cursor: pointer;
+  transition: filter 0.1s, transform 0.1s;
+  align-self: flex-start;
+}
+.trk-fight-btn:hover  { filter: brightness(1.25); }
+.trk-fight-btn:active { transform: translateY(1px); filter: brightness(0.9); }
+.trk-fight-icon { width: 16px; height: 16px; image-rendering: pixelated; }
 
 /* Player tracker + stats — hidden for now */
 #PlayerTracker,
@@ -1309,7 +1388,7 @@ onUnmounted(() => {
 /* ── Outer wrapper: grid item, events, pokéball anchor ── */
 .slot-outer {
   position: relative;
-  cursor: pointer;
+  cursor: grab;
   user-select: none;
   /* drop-shadow applied here so it's outside the inner clip-path */
   filter: drop-shadow(0 3px 0 rgba(0,0,0,0.55));
@@ -1812,6 +1891,12 @@ onUnmounted(() => {
   font-size: 9px; color: #fff; white-space: nowrap;
   background: rgba(0,0,0,0.55); border-radius: 4px; padding: 1px 5px;
   font-family: 'Pokemon GB', monospace; z-index: 2;
+}
+.player-nametag {
+  position: absolute; top: -4px; left: 50%; transform: translateX(-50%);
+  font-size: 9px; color: #fff; white-space: nowrap;
+  background: rgba(50,120,220,0.75); border-radius: 4px; padding: 1px 5px;
+  font-family: 'Pokemon GB', monospace; z-index: 2; pointer-events: none;
 }
 
 

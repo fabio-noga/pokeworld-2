@@ -48,10 +48,20 @@
                 <span class="pm-bar-val">{{ slot.xp % xpThreshold }} / {{ xpThreshold }}</span>
               </div>
 
-              <!-- Evolve button -->
+              <!-- Level-up evolve -->
               <button v-if="slot.pendingEvo" class="pm-evolve-btn" @click="$emit('evolve')">
                 ↑ EVOLVE → {{ pokedex(slot.pendingEvo) }}
               </button>
+              <!-- Special evolve (stone / trade) -->
+              <button v-if="specialEvo && !slot.pendingEvo" class="pm-evolve-btn pm-evolve-special" @click="$emit('evolve-special', specialEvo.to)">
+                {{ specialEvo.icon }} {{ specialEvo.label }} → {{ pokedex(specialEvo.to) }}
+              </button>
+              <!-- Eevee: three evolution choices -->
+              <div v-if="isEevee && !slot.pendingEvo" class="pm-eevee-evos">
+                <button v-for="e in EEVEE_SPECIAL" :key="e.to" class="pm-evolve-btn pm-evolve-special" @click="$emit('evolve-special', e.to)">
+                  {{ e.icon }} {{ e.label }} → {{ pokedex(e.to) }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -104,7 +114,46 @@ const STATS = statsData as Record<string, StatsEntry>
 const MOVES = movesData as Record<string, MoveEntry>
 
 const props = defineProps<{ slot: TeamSlot }>()
-defineEmits<{ close: []; evolve: [] }>()
+defineEmits<{ close: []; evolve: []; 'evolve-special': [to: number] }>()
+
+// ── Special evolutions (stone / trade) ──────────────────────────
+const SPECIAL_EVOS: Record<number, { to: number; icon: string; label: string }> = {
+  // Fire Stone
+  37:  { to: 38,  icon: '🔥', label: 'Fire Stone'    },  // Vulpix → Ninetales
+  58:  { to: 59,  icon: '🔥', label: 'Fire Stone'    },  // Growlithe → Arcanine
+  // Water Stone
+  61:  { to: 62,  icon: '💧', label: 'Water Stone'   },  // Poliwhirl → Poliwrath
+  90:  { to: 91,  icon: '💧', label: 'Water Stone'   },  // Shellder → Cloyster
+  120: { to: 121, icon: '💧', label: 'Water Stone'   },  // Staryu → Starmie
+  // Thunder Stone
+  25:  { to: 26,  icon: '⚡', label: 'Thunder Stone' },  // Pikachu → Raichu
+  // Leaf Stone
+  44:  { to: 45,  icon: '🌿', label: 'Leaf Stone'    },  // Gloom → Vileplume
+  70:  { to: 71,  icon: '🌿', label: 'Leaf Stone'    },  // Weepinbell → Victreebel
+  102: { to: 103, icon: '🌿', label: 'Leaf Stone'    },  // Exeggcute → Exeggutor
+  // Moon Stone
+  30:  { to: 31,  icon: '🌙', label: 'Moon Stone'    },  // Nidorina → Nidoqueen
+  33:  { to: 34,  icon: '🌙', label: 'Moon Stone'    },  // Nidorino → Nidoking
+  35:  { to: 36,  icon: '🌙', label: 'Moon Stone'    },  // Clefairy → Clefable
+  39:  { to: 40,  icon: '🌙', label: 'Moon Stone'    },  // Jigglypuff → Wigglytuff
+  // Eevee branches
+  133: { to: 134, icon: '💧', label: 'Water Stone'   },  // Eevee → Vaporeon (default; UI shows all 3)
+  // Trade evolutions
+  64:  { to: 65,  icon: '🔄', label: 'Trade'         },  // Kadabra → Alakazam
+  67:  { to: 68,  icon: '🔄', label: 'Trade'         },  // Machoke → Machamp
+  75:  { to: 76,  icon: '🔄', label: 'Trade'         },  // Graveler → Golem
+  93:  { to: 94,  icon: '🔄', label: 'Trade'         },  // Haunter → Gengar
+}
+
+// Eevee gets three separate buttons — handled via specialEvoList
+const EEVEE_SPECIAL = [
+  { to: 134, icon: '💧', label: 'Water Stone'   },
+  { to: 135, icon: '⚡', label: 'Thunder Stone' },
+  { to: 136, icon: '🔥', label: 'Fire Stone'    },
+]
+
+const specialEvo     = computed(() => props.slot.id === 133 ? null : (SPECIAL_EVOS[props.slot.id] ?? null))
+const isEevee        = computed(() => props.slot.id === 133)
 
 const TYPE_COLORS: Record<number, string> = {
   1: '#7a7a5a', 2: '#d85020', 3: '#982018', 4: '#3a5ab8',
@@ -456,6 +505,21 @@ function ppColor(cur: number, max: number) {
 .pm-evolve-btn:active {
   transform: translateY(2px);
   box-shadow: 0 1px 0 #3b0764;
+}
+.pm-evolve-special {
+  background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+  border-color: #1e3a8a;
+  box-shadow: 0 3px 0 #1e3a8a, 0 0 10px rgba(59,130,246,0.35);
+  animation: none;
+}
+.pm-evolve-special:hover {
+  box-shadow: 0 3px 0 #1e3a8a, 0 0 16px rgba(59,130,246,0.6);
+}
+.pm-eevee-evos {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-self: flex-start;
 }
 @keyframes evo-pulse-btn {
   0%, 100% { box-shadow: 0 3px 0 #3b0764, 0 0 10px rgba(168,85,247,0.4); }

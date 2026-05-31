@@ -47,9 +47,9 @@
                 v-model="privateKey"
                 class="mp-key-input"
                 type="text"
-                inputmode="numeric"
                 maxlength="5"
-                placeholder="5-digit key"
+                placeholder="e.g. AB3K7"
+                @input="privateKey = privateKey.toUpperCase().replace(/[^A-Z0-9]/g, '')"
                 @keydown.enter="doJoinPrivate"
               />
               <button class="mp-btn primary mp-private-btn" :disabled="privateKey.length !== 5 || joiningPrivate" @click="doJoinPrivate">
@@ -110,8 +110,8 @@ async function doReconnect() {
 }
 
 async function doJoinPrivate() {
-  const key = privateKey.value.trim()
-  if (!/^\d{5}$/.test(key)) { privateError.value = 'Enter exactly 5 digits'; return }
+  const key = privateKey.value.trim().toUpperCase()
+  if (!/^[A-Z0-9]{5}$/.test(key)) { privateError.value = 'Enter exactly 5 characters (A–Z, 0–9)'; return }
   privateError.value = ''
   joiningPrivate.value = true
   await joinPrivateRoom(key, playerInfo())
