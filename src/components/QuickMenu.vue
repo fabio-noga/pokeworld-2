@@ -44,7 +44,7 @@ const props = defineProps<{ padActive?: boolean; debugMode?: boolean }>()
 const emit  = defineEmits<{ 'toggle-dpad': []; 'network-click': [] }>()
 
 const modalStore = useModalStore()
-const open = ref(false)
+const open = ref(true)
 
 function pick(which: 'pc' | 'dex') {
   modalStore.togglePocket(which)

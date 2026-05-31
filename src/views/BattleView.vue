@@ -1,5 +1,9 @@
 <template>
   <div class="battle-page">
+
+  <!-- X button — always visible, emergency exit -->
+  <button class="battle-exit-btn" @click="forceClose" title="Leave Battle">✕</button>
+
   <main>
     <!-- Arena -->
     <div class="monitor" :style="{ backgroundImage: `url(/textures/Battle/Arena/background${arenaNum}.png)` }">
@@ -105,24 +109,30 @@
       </div>
     </div>
 
-    <!-- Move buttons -->
-    <div class="tackle">
+    <!-- Move buttons (hidden after battle ends) -->
+    <div class="tackle" v-if="!battleOver">
       <div class="Power1" @click="onMove(0)" @mouseover="showPP(0)" @mouseout="hidePP(0)"
-           :class="{ 'act-disabled': !canAct || battleOver || forcedSwitch }">
+           :class="{ 'act-disabled': !canAct || forcedSwitch }">
         <h2>{{ moveDisplay[0] }}</h2>
       </div>
       <div class="Power2" @click="onMove(1)" @mouseover="showPP(1)" @mouseout="hidePP(1)"
-           :class="{ 'act-disabled': !canAct || battleOver || forcedSwitch }">
+           :class="{ 'act-disabled': !canAct || forcedSwitch }">
         <h2>{{ moveDisplay[1] }}</h2>
       </div>
       <div class="Power3" @click="onMove(2)" @mouseover="showPP(2)" @mouseout="hidePP(2)"
-           :class="{ 'act-disabled': !canAct || battleOver || forcedSwitch }">
+           :class="{ 'act-disabled': !canAct || forcedSwitch }">
         <h2>{{ moveDisplay[2] }}</h2>
       </div>
       <div class="Power4" @click="onMove(3)" @mouseover="showPP(3)" @mouseout="hidePP(3)"
-           :class="{ 'act-disabled': !canAct || battleOver || forcedSwitch }">
+           :class="{ 'act-disabled': !canAct || forcedSwitch }">
         <h2>{{ moveDisplay[3] }}</h2>
       </div>
+    </div>
+
+    <!-- After-battle navigation (replaces move buttons) -->
+    <div class="after-battle-nav" v-else>
+      <button class="abn-btn abn-map" :disabled="allFainted" @click="goBack()">← BACK TO MAP</button>
+      <button class="abn-btn abn-pc" @click="goToPC()">OPEN PC →</button>
     </div>
 
     <!-- Team slots — click to switch or use item -->
@@ -154,18 +164,15 @@
       </div>
     </div>
   </main>
-  </div>
 
-  <AppHeader
-    :label="allFainted ? 'Health Center' : 'BACK TO MAP'"
-    @nav-click="allFainted ? goToHealthCenter() : (forcedSwitch ? null : goBack())"
-    :style="forcedSwitch && !allFainted ? { opacity: '0.4', pointerEvents: 'none' } : {}" />
+  <!-- Mobile: always-visible leave button at the very bottom -->
+  <button class="mob-leave-battle" @click="forceClose">LEAVE BATTLE</button>
+
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
-import AppHeader from '../components/AppHeader.vue'
 import { useSaveStore } from '../stores/save'
 import { pokedex, padId } from '../data/pokemon'
 import movesData from '../data/moves.json'
@@ -219,11 +226,11 @@ function effectivenessLabel(eff: number): string | null {
   return null
 }
 
-const router = useRouter()
+const emit = defineEmits<{ close: []; 'close-open-pc': [] }>()
 const saveStore = useSaveStore()
+const encounter = saveStore.encounter
 const logEl = ref<HTMLElement | null>(null)
 const arenaNum = ref(Math.floor(Math.random() * 4) + 1)
-const encounter = saveStore.encounter
 
 // ── Active Pokémon (reactive — updates when team[0] changes on switch) ─
 const active = computed(() => saveStore.team[0])
@@ -814,29 +821,38 @@ async function onCatch(ballNum = 23) {
 }
 
 // ── Navigation ────────────────────────────────────────────────────
-function goBack() {
-  // Reset trainer encounter flag so next wild battle is clean
+function clearEncounter() {
   encounter.isTrainer = false
   encounter.trainerId = ''
   encounter.trainerTeam = []
-  router.push('/game')
 }
 
-function goToHealthCenter() {
-  saveStore.team.forEach(slot => {
-    if (!slot.id) return
-    const baseHP = STATS[String(slot.id)]?.hp ?? 45
-    slot.hp = calcMaxHP(baseHP, slot.lvl)
-    slot.moves.forEach(m => {
-      const entry = MOVES[String(m.id)]
-      if (entry) m.pp = entry.pp
+function goBack() {
+  clearEncounter()
+  emit('close')
+}
+
+function goToPC() {
+  if (allFainted.value) {
+    // Heal team before opening PC (mirrors old Health Center behaviour)
+    saveStore.team.forEach(slot => {
+      if (!slot.id) return
+      const baseHP = STATS[String(slot.id)]?.hp ?? 45
+      slot.hp = calcMaxHP(baseHP, slot.lvl)
+      slot.moves.forEach(m => {
+        const entry = MOVES[String(m.id)]
+        if (entry) m.pp = entry.pp
+      })
     })
-  })
-  encounter.isTrainer = false
-  encounter.trainerId = ''
-  encounter.trainerTeam = []
-  saveStore.save()
-  router.push('/game')
+    saveStore.save()
+  }
+  clearEncounter()
+  emit('close-open-pc')
+}
+
+function forceClose() {
+  clearEncounter()
+  emit('close')
 }
 
 onMounted(async () => {
@@ -862,7 +878,7 @@ onMounted(async () => {
       log('A wild MissingNo. appeared!!')
       setTimeout(() => { canAct.value = true }, 600)
     } else {
-      router.push('/game')
+      emit('close')
     }
     return
   }
@@ -908,6 +924,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   background-color: #060e16;
+  position: relative;
   background-image: radial-gradient(circle, #1a2a3a 1.5px, transparent 1.5px);
   background-size: 22px 22px;
 }
@@ -1423,5 +1440,45 @@ main {
       transparent 18px, #602020 18px, #602020 20px, transparent 20px
     ),
     linear-gradient(180deg, #3a1010 0%, #1e0808 100%);
+}
+
+/* ── Overlay exit button (top-right X) ── */
+.battle-exit-btn {
+  position: absolute; top: 12px; right: 12px; z-index: 10;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.3);
+  color: #fff; font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.battle-exit-btn:hover { background: rgba(200,0,0,0.7); }
+
+/* ── After-battle 2-button nav ── */
+.after-battle-nav {
+  display: flex; gap: 0; width: 100%;
+}
+.abn-btn {
+  flex: 1; padding: 18px 0;
+  font-family: 'Pokemon GB', monospace, sans-serif;
+  font-size: 10px; font-weight: bold; border: none; cursor: pointer;
+  letter-spacing: 1px; transition: filter 0.15s;
+}
+.abn-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.abn-map { background: #1a2a3a; color: #c8e0f0; border-right: 1px solid #2a4268; }
+.abn-map:not(:disabled):hover { filter: brightness(1.2); }
+.abn-pc  { background: #1c3a28; color: #44cc88; }
+.abn-pc:hover { filter: brightness(1.2); }
+
+/* ── Mobile leave-battle button (always visible on small screens) ── */
+.mob-leave-battle {
+  display: none;
+  width: 100%; padding: 16px;
+  background: #3a1010; color: #ff6666; border: none;
+  font-family: 'Pokemon GB', monospace, sans-serif;
+  font-size: 9px; font-weight: bold; cursor: pointer; letter-spacing: 1px;
+}
+@media (max-width: 600px) {
+  .mob-leave-battle { display: block; }
+  .battle-exit-btn  { display: none; }
 }
 </style>

@@ -18,18 +18,15 @@
           <!-- Connected: player list -->
           <template v-if="isOnline">
             <div class="mp-players">
-              <!-- Self -->
               <div class="mp-player-row mp-self">
                 <img :src="`/sprites/trainers/${saveStore.playerData.sprite}/image.png`" />
                 <span>{{ saveStore.playerData.nome || 'You' }} <em>(you)</em></span>
               </div>
-              <!-- Others -->
               <div v-for="p in mpStore.playersList" :key="p.id" class="mp-player-row">
                 <img :src="`/sprites/trainers/${p.sprite}/image.png`" />
                 <span>{{ p.name }}</span>
               </div>
             </div>
-
             <button class="mp-btn danger" @click="doDisconnect">Leave Room</button>
           </template>
 
@@ -40,6 +37,27 @@
               {{ reconnecting ? 'Connecting…' : 'Reconnect' }}
             </button>
           </template>
+
+          <!-- Private room — always visible -->
+          <div class="mp-divider"></div>
+          <div class="mp-private">
+            <div class="mp-private-label">PRIVATE ROOM</div>
+            <div class="mp-private-row">
+              <input
+                v-model="privateKey"
+                class="mp-key-input"
+                type="text"
+                inputmode="numeric"
+                maxlength="5"
+                placeholder="5-digit key"
+                @keydown.enter="doJoinPrivate"
+              />
+              <button class="mp-btn primary mp-private-btn" :disabled="privateKey.length !== 5 || joiningPrivate" @click="doJoinPrivate">
+                {{ joiningPrivate ? '…' : 'JOIN' }}
+              </button>
+            </div>
+            <p v-if="privateError" class="mp-private-error">{{ privateError }}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -48,7 +66,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { isOnline, statusMsg, autoConnect, disconnect } from '../composables/useMultiplayer'
+import { isOnline, statusMsg, autoConnect, disconnect, joinPrivateRoom } from '../composables/useMultiplayer'
 import { useMultiplayerStore } from '../stores/multiplayer'
 import { useSaveStore } from '../stores/save'
 import { getOrCreateUUID } from '../utils/uuid'
@@ -63,7 +81,23 @@ defineEmits<{ (e: 'close'): void }>()
 const mpStore   = useMultiplayerStore()
 const saveStore = useSaveStore()
 
-const reconnecting = ref(false)
+const reconnecting  = ref(false)
+const privateKey    = ref('')
+const joiningPrivate = ref(false)
+const privateError  = ref('')
+
+function playerInfo() {
+  const followerId = saveStore.team[0]?.id ?? 1
+  return {
+    uuid:       getOrCreateUUID(),
+    name:       saveStore.playerData.nome || 'Trainer',
+    sprite:     String(saveStore.playerData.sprite),
+    tile:       props.currentTile,
+    dir:        props.currentDir,
+    followerId,
+    shiny:      saveStore.shinydex?.[String(followerId)] === 'caught',
+  }
+}
 
 function doDisconnect() {
   disconnect()
@@ -71,17 +105,20 @@ function doDisconnect() {
 
 async function doReconnect() {
   reconnecting.value = true
-  const followerId = saveStore.team[0]?.id ?? 1
-  await autoConnect({
-    uuid:  getOrCreateUUID(),
-    name:  saveStore.playerData.nome || 'Trainer',
-    sprite: String(saveStore.playerData.sprite),
-    tile:  props.currentTile,
-    dir:   props.currentDir,
-    followerId,
-    shiny: saveStore.shinydex?.[String(followerId)] === 'caught',
-  })
+  await autoConnect(playerInfo())
   reconnecting.value = false
+}
+
+async function doJoinPrivate() {
+  const key = privateKey.value.trim()
+  if (!/^\d{5}$/.test(key)) { privateError.value = 'Enter exactly 5 digits'; return }
+  privateError.value = ''
+  joiningPrivate.value = true
+  await joinPrivateRoom(key, playerInfo())
+  joiningPrivate.value = false
+  if (statusMsg.value === 'Private room is full') {
+    privateError.value = 'Room is full (15/15)'
+  }
 }
 </script>
 
@@ -115,7 +152,7 @@ async function doReconnect() {
 
 .mp-hint { font-size: 10px; color: #6a8aa0; margin: 0; }
 
-.mp-players { display: flex; flex-direction: column; gap: 5px; max-height: 200px; overflow-y: auto; }
+.mp-players { display: flex; flex-direction: column; gap: 5px; max-height: 160px; overflow-y: auto; }
 .mp-player-row {
   display: flex; align-items: center; gap: 8px;
   background: #0b1520; padding: 4px 8px;
@@ -134,4 +171,19 @@ async function doReconnect() {
 .mp-btn.primary:hover:not(:disabled) { background: #245a38; }
 .mp-btn.danger  { background: #3a1010; color: #cc4444; border: 1px solid #cc4444; }
 .mp-btn.danger:hover { background: #4a1818; }
+
+/* ── Private room section ── */
+.mp-divider { border-top: 1px solid #1e3040; margin: 0 -14px; }
+.mp-private { display: flex; flex-direction: column; gap: 8px; }
+.mp-private-label { font-size: 9px; color: #3a5a70; letter-spacing: 1px; }
+.mp-private-row { display: flex; gap: 6px; }
+.mp-key-input {
+  flex: 1; background: #0b1520; border: 1px solid #2a4268; color: #c8e0f0;
+  font-family: 'Pokemon GB', monospace, sans-serif; font-size: 12px;
+  padding: 6px 8px; outline: none; letter-spacing: 3px; text-align: center;
+}
+.mp-key-input::placeholder { letter-spacing: 0; color: #3a5a70; font-size: 9px; }
+.mp-key-input:focus { border-color: #44cc88; }
+.mp-private-btn { padding: 6px 12px; flex-shrink: 0; }
+.mp-private-error { font-size: 9px; color: #cc4444; margin: 0; }
 </style>

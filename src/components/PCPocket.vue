@@ -6,6 +6,7 @@
       <span class="pc-title">BILL'S PC</span>
       <span class="pc-sub">BOX 1</span>
       <span class="blink">▮</span>
+      <button class="pc-close-btn pc-fs-btn" @click="openFullscreen" @pointerdown.stop title="Fullscreen">⛶</button>
       <button class="pc-close-btn" @click="$emit('close')" @pointerdown.stop title="Close">✕</button>
     </div>
 
@@ -225,6 +226,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useSaveStore } from '../stores/save'
+import { useModalStore } from '../stores/modals'
 import { useDraggable } from '../composables/useDraggable'
 import { pokedex, padId } from '../data/pokemon'
 import statsData from '../data/pokemon-stats.json'
@@ -232,6 +234,12 @@ import movesData from '../data/moves.json'
 import learnsetsData from '../data/learnsets.json'
 
 const emit = defineEmits<{ close: [] }>()
+const modalStore = useModalStore()
+
+function openFullscreen() {
+  emit('close')
+  modalStore.openPC()
+}
 
 const panelRef = ref<HTMLElement | null>(null)
 const { dragStyle, onHandlePointerDown } = useDraggable('pkw_pc_pos', panelRef)

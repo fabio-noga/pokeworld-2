@@ -5,28 +5,26 @@
     <div><img src="/textures/Header/pokeballcenter.png" alt="pokeball" /></div>
   </RouterLink>
 
-  <!-- Desktop nav -->
+  <!-- Desktop nav — game mode: logout only; default: full nav -->
   <nav id="app-nav" class="nav-desktop">
-    <RouterLink to="/game" class="hnav-item" title="Map">
-      <i class="fa-solid fa-map-location-dot"></i>
-      <span>MAP</span>
-    </RouterLink>
-
-    <RouterLink to="/pokedex" class="hnav-item hnav-dex" title="Pokédex">
-      <img src="/textures/Nav/Pokedex/0.png" class="hnav-dex-img" alt="Pokédex" />
-      <span>DEX</span>
-    </RouterLink>
-
-    <RouterLink to="/pc" class="hnav-item" title="PC">
-      <i class="fa-solid fa-computer"></i>
-      <span>PC</span>
-    </RouterLink>
-
-    <RouterLink to="/save" class="hnav-item" title="Save">
-      <i class="fa-solid fa-gear"></i>
-      <span>SAVE</span>
-    </RouterLink>
-
+    <template v-if="!gameMode">
+      <RouterLink to="/game" class="hnav-item" title="Map">
+        <i class="fa-solid fa-map-location-dot"></i>
+        <span>MAP</span>
+      </RouterLink>
+      <RouterLink to="/pokedex" class="hnav-item hnav-dex" title="Pokédex">
+        <img src="/textures/Nav/Pokedex/0.png" class="hnav-dex-img" alt="Pokédex" />
+        <span>DEX</span>
+      </RouterLink>
+      <RouterLink to="/pc" class="hnav-item" title="PC">
+        <i class="fa-solid fa-computer"></i>
+        <span>PC</span>
+      </RouterLink>
+      <RouterLink to="/save" class="hnav-item" title="Save">
+        <i class="fa-solid fa-gear"></i>
+        <span>SAVE</span>
+      </RouterLink>
+    </template>
     <button id="logout-btn" @click="$emit('navClick')" title="Logout">
       <i class="fa-solid fa-right-from-bracket"></i>
     </button>
@@ -40,18 +38,31 @@
   <!-- Mobile dropdown -->
   <Transition name="burger-drop">
     <nav v-if="menuOpen" class="nav-mobile" @click="menuOpen = false">
-      <RouterLink to="/game" class="mob-item">
-        <i class="fa-solid fa-map-location-dot"></i> MAP
-      </RouterLink>
-      <RouterLink to="/pokedex" class="mob-item">
-        <img src="/textures/Nav/Pokedex/0.png" class="mob-dex-img" alt="" /> DEX
-      </RouterLink>
-      <RouterLink to="/pc" class="mob-item">
-        <i class="fa-solid fa-computer"></i> PC
-      </RouterLink>
-      <RouterLink to="/save" class="mob-item">
-        <i class="fa-solid fa-gear"></i> SAVE
-      </RouterLink>
+      <template v-if="gameMode">
+        <button class="mob-item" @click.stop="$emit('openDex'); menuOpen = false">
+          <img src="/textures/Nav/Pokedex/0.png" class="mob-dex-img" alt="" /> DEX
+        </button>
+        <button class="mob-item" @click.stop="$emit('openPC'); menuOpen = false">
+          <i class="fa-solid fa-computer"></i> PC
+        </button>
+        <RouterLink to="/save" class="mob-item">
+          <i class="fa-solid fa-gear"></i> SAVE
+        </RouterLink>
+      </template>
+      <template v-else>
+        <RouterLink to="/game" class="mob-item">
+          <i class="fa-solid fa-map-location-dot"></i> MAP
+        </RouterLink>
+        <RouterLink to="/pokedex" class="mob-item">
+          <img src="/textures/Nav/Pokedex/0.png" class="mob-dex-img" alt="" /> DEX
+        </RouterLink>
+        <RouterLink to="/pc" class="mob-item">
+          <i class="fa-solid fa-computer"></i> PC
+        </RouterLink>
+        <RouterLink to="/save" class="mob-item">
+          <i class="fa-solid fa-gear"></i> SAVE
+        </RouterLink>
+      </template>
       <button class="mob-item mob-logout" @click.stop="$emit('navClick'); menuOpen = false">
         <i class="fa-solid fa-right-from-bracket"></i> LOGOUT
       </button>
@@ -63,7 +74,8 @@
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
-defineEmits<{ navClick: [] }>()
+defineProps<{ gameMode?: boolean }>()
+defineEmits<{ navClick: []; openPC: []; openDex: [] }>()
 const menuOpen = ref(false)
 </script>
 

@@ -66,6 +66,16 @@
           </button>
         </div>
         <div class="setting-row">
+          <span class="setting-label">Multiplayer</span>
+          <button
+            class="toggle-btn"
+            :class="{ active: saveStore.multiplayerEnabled }"
+            @click="toggleMultiplayer"
+          >
+            {{ saveStore.multiplayerEnabled ? 'ON' : 'OFF' }}
+          </button>
+        </div>
+        <div class="setting-row">
           <span class="setting-label">XP Rate</span>
           <div class="multiplier-ctrl">
             <button class="mult-btn" @click="adjustXp(-1)" :disabled="saveStore.xpMultiplier <= 1">−</button>
@@ -153,6 +163,11 @@ function confirmWipe() {
 
 function toggleXpShare() {
   saveStore.xpShare = !saveStore.xpShare
+  saveStore.save()
+}
+
+function toggleMultiplayer() {
+  saveStore.multiplayerEnabled = !saveStore.multiplayerEnabled
   saveStore.save()
 }
 

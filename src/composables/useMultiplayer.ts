@@ -38,10 +38,11 @@ const ROOM_PREFIX      = 'pkw-r'
 const MAX_ROOM         = 20
 const MAX_PLAYERS      = 15
 const WALK_MS          = 280
-const CONNECT_TIMEOUTS = [1000, 3000, 5000, 10000]
 
 // Persisted across reconnects so host-migration can send updated position
 let _myInfo: PlayerInfo | null = null
+// Set when in a private room — used for self-healing reconnect without server
+let _privateKey: string | null = null
 
 // ── Shared reactive state ────────────────────────────────────────────────────
 
@@ -222,35 +223,322 @@ function handleGuestData(raw: unknown) {
   }
 }
 
-// ── Auto-connect: scan rooms 1 → MAX_ROOM ────────────────────────────────────
+// ── Server API helpers ────────────────────────────────────────────────────────
 
-export async function autoConnect(myInfo: PlayerInfo): Promise<void> {
-  if (isOnline.value) return
-  _myInfo = myInfo
+type Assignment = { action: 'join' | 'host'; room?: number } | null
 
-  const { Peer } = await import('peerjs')
-  for (let i = 0; i < CONNECT_TIMEOUTS.length; i++) {
-    const n = (i % MAX_ROOM) + 1
-    statusMsg.value = i === 0 ? 'Connecting…' : `Connecting… (${i + 1}/${CONNECT_TIMEOUTS.length})`
-    const result = await attemptRoom(Peer, n, myInfo, CONNECT_TIMEOUTS[i])
-    if (result === 'hosted' || result === 'joined') return
+function brokerBase(): string | null {
+  const host = import.meta.env.VITE_PEER_HOST as string | undefined
+  return host ? `https://${host}` : null
+}
+
+async function fetchRoomAssignment(): Promise<Assignment> {
+  const base = brokerBase()
+  if (!base) return null
+  try {
+    const res = await fetch(`${base}/room/assign`, { signal: AbortSignal.timeout(3000) })
+    if (!res.ok) return null
+    return await res.json() as Assignment
+  } catch {
+    return null
+  }
+}
+
+async function reportHostGone(room: number): Promise<Assignment> {
+  const base = brokerBase()
+  if (!base) return null
+  try {
+    const res = await fetch(`${base}/room/host-gone`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room }),
+      signal: AbortSignal.timeout(3000),
+    })
+    if (!res.ok) return null
+    return await res.json() as Assignment
+  } catch {
+    return null
+  }
+}
+
+// ── Become host: probe broker for first free room number ──────────────────────
+
+async function becomeHost(
+  Peer: typeof import('peerjs').Peer,
+  myInfo: PlayerInfo,
+): Promise<void> {
+  for (let n = 1; n <= MAX_ROOM; n++) {
+    const result = await attemptRoom(Peer, n, myInfo, 3000)
+    if (result === 'hosted') return
+    if (result === 'joined') return  // room came alive during probe
   }
   statusMsg.value = 'Could not connect'
 }
 
-// ── Re-connect starting from a preferred room (for host migration) ────────────
+// ── Auto-connect: try known room first, server only on failure ────────────────
 
-async function autoConnectFromRoom(preferredRoom: number, myInfo: PlayerInfo): Promise<void> {
+export async function autoConnect(myInfo: PlayerInfo): Promise<void> {
   if (isOnline.value) return
   _myInfo = myInfo
+  _privateKey = null
+  statusMsg.value = 'Connecting…'
 
   const { Peer } = await import('peerjs')
-  for (let i = 0; i < CONNECT_TIMEOUTS.length; i++) {
-    const n = ((preferredRoom - 1 + i) % MAX_ROOM) + 1
-    const result = await attemptRoom(Peer, n, myInfo, CONNECT_TIMEOUTS[i])
-    if (result === 'hosted' || result === 'joined') return
+
+  // 1. Returning player: try last known room directly (no server ping)
+  if (roomNum.value > 0) {
+    const result = await joinAsGuest(Peer, roomNum.value, myInfo)
+    if (result === 'joined') return
   }
-  statusMsg.value = 'Could not connect'
+
+  // 2. Direct attempt failed — ask server once what to do
+  const assignment = await fetchRoomAssignment()
+
+  if (assignment?.action === 'join' && assignment.room) {
+    const result = await joinAsGuest(Peer, assignment.room, myInfo)
+    if (result === 'joined') return
+    // Race condition: server said join but room wasn't ready — fall through to host
+  }
+
+  // 3. No rooms or server down — become host
+  await becomeHost(Peer, myInfo)
+}
+
+// ── Re-connect after host leaves (migration) ──────────────────────────────────
+
+async function autoConnectFromRoom(prevRoom: number, myInfo: PlayerInfo): Promise<void> {
+  if (isOnline.value) return
+  _myInfo = myInfo
+  statusMsg.value = 'Reconnecting…'
+
+  const { Peer } = await import('peerjs')
+
+  // 1. Try rejoining the same room directly — someone may have already re-hosted it
+  const directResult = await joinAsGuest(Peer, prevRoom, myInfo)
+  if (directResult === 'joined') return
+
+  // 2. Direct rejoin failed — report to server, get authoritative assignment
+  const assignment = await reportHostGone(prevRoom)
+
+  if (assignment?.action === 'host' && assignment.room) {
+    const result = await attemptRoom(Peer, assignment.room, myInfo, 5000)
+    if (result === 'hosted' || result === 'joined') return
+  } else if (assignment?.action === 'join' && assignment.room) {
+    const result = await joinAsGuest(Peer, assignment.room, myInfo)
+    if (result === 'joined') return
+  }
+
+  // 3. Fallback — become host of any free room
+  await becomeHost(Peer, myInfo)
+}
+
+// ── Private room ──────────────────────────────────────────────────────────────
+
+async function fetchPrivateRoomAssignment(key: string): Promise<{ action: string; peerId: string } | null> {
+  const base = brokerBase()
+  if (!base) return null
+  try {
+    const res = await fetch(`${base}/room/join-private`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+      signal: AbortSignal.timeout(3000),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+// Host a private room using the key as the peer ID
+function setupHostPrivate(peer: import('peerjs').Peer, myInfo: PlayerInfo, key: string) {
+  const store = useMultiplayerStore()
+  _peer = peer
+  _privateKey = key
+  isHost.value   = true
+  isOnline.value = true
+  roomNum.value  = 0
+  roomCount.value = 1
+  statusMsg.value = `Private ·${key}`
+
+  peer.on('connection', (conn: DataConnection) => {
+    if (_connections.size >= MAX_PLAYERS - 1) {
+      conn.on('open', () => { send(conn, { type: 'full' }); setTimeout(() => conn.close(), 200) })
+      return
+    }
+    conn.on('open', () => { _connections.set(conn.peer, conn) })
+    conn.on('data', (raw) => {
+      const msg = JSON.parse(raw as string)
+      if (msg.type !== 'hello') return
+      const helloMsg = msg as HelloMsg
+      const uuid = helloMsg.uuid
+      const oldPeerId = _uuidToPeer.get(uuid)
+      if (oldPeerId && oldPeerId !== conn.peer) {
+        _peerToUuid.delete(oldPeerId)
+        const oldConn = _connections.get(oldPeerId)
+        if (oldConn) { try { oldConn.close() } catch { /* ignore */ } }
+        _connections.delete(oldPeerId)
+      }
+      _peerToUuid.set(conn.peer, uuid)
+      _uuidToPeer.set(uuid, conn.peer)
+      const newPlayer: Omit<OtherPlayer, 'walking' | 'prevTile'> = {
+        id: uuid, name: helloMsg.name, sprite: helloMsg.sprite,
+        tile: helloMsg.tile, dir: helloMsg.dir,
+        followerId: helloMsg.followerId, shiny: helloMsg.shiny,
+      }
+      store.upsert(newPlayer)
+      roomCount.value = _connections.size + 1
+      const hostSelf: Omit<OtherPlayer, 'walking' | 'prevTile'> = {
+        id: myInfo.uuid, name: myInfo.name, sprite: myInfo.sprite,
+        tile: myInfo.tile, dir: myInfo.dir,
+        followerId: myInfo.followerId, shiny: myInfo.shiny,
+      }
+      const existing = store.playersList
+        .filter((p: OtherPlayer) => p.id !== uuid)
+        .map(({ walking: _w, prevTile: _pt, ...rest }: OtherPlayer) => rest)
+      send(conn, { type: 'welcome', players: [hostSelf, ...existing] } as WelcomeMsg)
+      broadcastExcept(conn.peer, { type: 'joined', ...newPlayer } as JoinedMsg)
+      conn.removeAllListeners('data')
+      conn.on('data', (raw2) => {
+        const m = JSON.parse(raw2 as string) as MoveOutMsg | FollowerOutMsg
+        const senderUuid = _peerToUuid.get(conn.peer)
+        if (!senderUuid) return
+        if (m.type === 'move') {
+          triggerWalkWithPos(senderUuid, m.tile, m.dir)
+          broadcastExcept(conn.peer, { type: 'move', id: senderUuid, tile: m.tile, dir: m.dir } as MoveRelMsg)
+        } else if (m.type === 'follower') {
+          store.updateFollower(senderUuid, m.followerId, m.shiny)
+          broadcastExcept(conn.peer, { type: 'follower', id: senderUuid, followerId: m.followerId, shiny: m.shiny } as FollowerRelMsg)
+        }
+      })
+    })
+    conn.on('close', () => {
+      const uuid = _peerToUuid.get(conn.peer)
+      _connections.delete(conn.peer)
+      _peerToUuid.delete(conn.peer)
+      if (uuid) { _uuidToPeer.delete(uuid); store.remove(uuid); broadcastAll({ type: 'left', id: uuid } as LeftMsg) }
+      roomCount.value = _connections.size + 1
+    })
+    conn.on('error', () => {
+      const uuid = _peerToUuid.get(conn.peer)
+      _connections.delete(conn.peer)
+      _peerToUuid.delete(conn.peer)
+      if (uuid) { _uuidToPeer.delete(uuid) }
+      roomCount.value = _connections.size + 1
+    })
+  })
+  peer.on('error', () => { statusMsg.value = 'Room error' })
+}
+
+// Join an existing private room as guest
+function joinPrivateAsGuest(
+  Peer: typeof import('peerjs').Peer,
+  key: string,
+  myInfo: PlayerInfo,
+): Promise<AttemptResult> {
+  const store = useMultiplayerStore()
+  const peerId = `pkw-k${key}`
+
+  return new Promise((resolve) => {
+    const peer = new Peer(peerOptions() as any)
+    let settled = false
+    function settle(r: AttemptResult) { if (settled) return; settled = true; resolve(r) }
+
+    peer.on('open', () => {
+      const conn = peer.connect(peerId, { reliable: true })
+      _hostConn = conn
+      conn.on('open', () => { send(conn, { type: 'hello', ...myInfo } as HelloMsg) })
+      conn.on('data', (raw) => {
+        const msg = JSON.parse(raw as string) as IncomingMsg
+        if (msg.type === 'full') { peer.destroy(); _hostConn = null; settle('full'); return }
+        if (msg.type === 'welcome') {
+          _peer = peer
+          _privateKey = key
+          isHost.value   = false
+          isOnline.value = true
+          roomNum.value  = 0
+          statusMsg.value = `Private ·${key}`
+          store.clear()
+          msg.players.forEach((p: Omit<OtherPlayer, 'walking' | 'prevTile'>) => store.upsert(p))
+          roomCount.value = store.playersList.length + 1
+          conn.removeAllListeners('data')
+          conn.on('data', handleGuestData)
+          settle('joined')
+        }
+      })
+      conn.on('close', () => {
+        if (!settled) { settle('error'); peer.destroy(); return }
+        if (isOnline.value) {
+          const savedInfo = _myInfo
+          const savedKey  = _privateKey
+          isOnline.value = false; isHost.value = false
+          _peer = null; _hostConn = null; roomCount.value = 0
+          statusMsg.value = 'Reconnecting…'
+          showToast('Host left — reconnecting…')
+          const jitter = Math.floor(Math.random() * 400) + 100
+          setTimeout(async () => {
+            store.clear()
+            if (!savedInfo || !savedKey) return
+            // Private rooms: reconnect directly to same key — no server ping needed
+            const { Peer: P } = await import('peerjs')
+            const r = await joinPrivateAsGuest(P, savedKey, savedInfo)
+            if (r !== 'joined') {
+              // Become new host of same private key
+              const p = new P(`pkw-k${savedKey}`, peerOptions())
+              p.on('open', () => setupHostPrivate(p, savedInfo, savedKey))
+              p.on('error', () => { statusMsg.value = 'Could not reconnect' })
+            }
+          }, jitter)
+        }
+      })
+      conn.on('error', () => { if (!settled) settle('error') })
+    })
+    peer.on('error', () => settle('error'))
+  })
+}
+
+// ── Public: join a private room by 5-digit key ────────────────────────────────
+
+export async function joinPrivateRoom(key: string, myInfo: PlayerInfo): Promise<void> {
+  if (isOnline.value) disconnect()
+  _myInfo = myInfo
+  statusMsg.value = 'Connecting…'
+
+  const { Peer } = await import('peerjs')
+
+  // Ask server: is this key hosted already?
+  const assignment = await fetchPrivateRoomAssignment(key)
+
+  if (!assignment || assignment.action === 'host') {
+    // Become host of pkw-k{key}
+    const peer = new Peer(`pkw-k${key}`, peerOptions())
+    peer.on('open', () => setupHostPrivate(peer, myInfo, key))
+    peer.on('error', (err: { type: string }) => {
+      if (err.type === 'unavailable-id') {
+        // Race: someone else just became host — join instead
+        peer.destroy()
+        joinPrivateAsGuest(Peer, key, myInfo)
+      } else {
+        statusMsg.value = 'Could not connect'
+      }
+    })
+    return
+  }
+
+  if (assignment.action === 'full') {
+    statusMsg.value = 'Private room is full'
+    return
+  }
+
+  // Join as guest
+  const result = await joinPrivateAsGuest(Peer, key, myInfo)
+  if (result !== 'joined') {
+    // Room vanished between server query and join — try to become host
+    const peer = new Peer(`pkw-k${key}`, peerOptions())
+    peer.on('open', () => setupHostPrivate(peer, myInfo, key))
+    peer.on('error', () => { statusMsg.value = 'Could not connect' })
+  }
 }
 
 // ── Room attempt ──────────────────────────────────────────────────────────────
@@ -441,6 +729,7 @@ export function disconnect() {
   roomNum.value   = 0
   roomCount.value = 0
   statusMsg.value = 'Offline'
+  _privateKey     = null
 }
 
 // ── Composable (thin wrapper) ─────────────────────────────────────────────────

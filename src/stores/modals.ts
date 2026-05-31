@@ -22,10 +22,16 @@ export const useModalStore = defineStore('modals', () => {
   function closePocket() { pocketOpen.value = null }
   function openPocketDex(id = 1) { pocketDexId.value = id; pocketOpen.value = 'dex' }
 
+  // ── Battle overlay ────────────────────────────────────────────────
+  const battleOpen = ref(false)
+  function openBattle()  { battleOpen.value = true  }
+  function closeBattle() { battleOpen.value = false }
+
   return {
     pcOpen, dexOpen, dexId,
     openPC, closePC, openDex, closeDex,
     pocketOpen, pocketDexId,
     togglePocket, closePocket, openPocketDex,
+    battleOpen, openBattle, closeBattle,
   }
 })

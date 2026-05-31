@@ -1,5 +1,5 @@
 <template>
-  <AppHeader @nav-click="doLogout" />
+  <AppHeader game-mode @nav-click="doLogout" @open-pc="modalStore.openPC()" @open-dex="modalStore.openDex()" />
 
   <!-- Green background -->
   <div class="bg-green"></div>
@@ -132,6 +132,9 @@
   <Transition name="mp-toast">
     <div v-if="mp.toastMsg.value" class="mp-toast">{{ mp.toastMsg.value }}</div>
   </Transition>
+
+  <!-- Multiplayer opt-in — shown once after first-run or on first game load -->
+  <MultiplayerOptInModal v-if="showMpOptIn" @choose="onMpOptIn" />
 
   <!-- First-run modal — name + starter selection for new players -->
   <FirstRunModal
@@ -284,9 +287,11 @@ import QuickMenu from '../components/QuickMenu.vue'
 import VirtualJoystick from '../components/VirtualJoystick.vue'
 import PokemonInfoModal from '../components/PokemonInfoModal.vue'
 import MultiplayerModal from '../components/MultiplayerModal.vue'
+import MultiplayerOptInModal from '../components/MultiplayerOptInModal.vue'
 import FirstRunModal from '../components/FirstRunModal.vue'
 import { useAuthStore } from '../stores/auth'
 import { useSaveStore } from '../stores/save'
+import { useModalStore } from '../stores/modals'
 import { useMultiplayer, autoConnect, broadcastMove, broadcastFollower } from '../composables/useMultiplayer'
 import { useMultiplayerStore, type Direction } from '../stores/multiplayer'
 import { getOrCreateUUID, isFirstSession } from '../utils/uuid'
@@ -299,12 +304,14 @@ const STATS = statsData as Record<string, StatsEntry>
 const router = useRouter()
 const authStore = useAuthStore()
 const saveStore = useSaveStore()
+const modalStore = useModalStore()
 const mp = useMultiplayer()
 const mpStore = useMultiplayerStore()
 
 // ── Multiplayer UI ───────────────────────────────────────────────
 const showMpModal   = ref(false)
 const showFirstRun  = ref(false)
+const showMpOptIn   = ref(false)
 const currentDir    = ref<Direction>('down')
 // Sprite frames per direction: idle and walking
 const idleFrames: Record<Direction, number> = { down: 1, up: 10, left: 4, right: 7 }
@@ -496,7 +503,7 @@ function startTrainerBattle(npc: NpcDef) {
   saveStore.encounter.number = teamWithLevels[0].id
   saveStore.encounter.level  = teamWithLevels[0].lvl
   saveStore.encounter.shiny  = false
-  router.push('/battle')
+  modalStore.openBattle()
 }
 
 // ── Walk-to NPC ───────────────────────────────────────────────────
@@ -781,10 +788,10 @@ function stopFishingCycle() {
 
 function startBattle() {
   if (allDead.value) {
-    router.push('/pc')
+    modalStore.openPC()
     return
   }
-  router.push('/battle')
+  modalStore.openBattle()
 }
 
 // ── Player sprite helpers ────────────────────────────────────────
@@ -969,6 +976,13 @@ async function doLogout() {
 }
 
 // ── Multiplayer helpers ───────────────────────────────────────────
+function onMpOptIn(enabled: boolean) {
+  showMpOptIn.value = false
+  saveStore.multiplayerEnabled = enabled
+  saveStore.save()
+  if (enabled) doAutoConnect()
+}
+
 async function doAutoConnect() {
   const followerId = saveStore.team[0]?.id ?? 1
   await autoConnect({
@@ -996,7 +1010,8 @@ function onFirstRun({ name, starterId }: { name: string; starterId: number }) {
     saveStore.playerData.nome = name
     saveStore.save()
   }
-  doAutoConnect()
+  // Always ask about multiplayer after first-run setup
+  showMpOptIn.value = true
 }
 
 // ── Healing & team management ─────────────────────────────────────
@@ -1064,7 +1079,7 @@ function updatePetSprite() {
 // ── Init (equivalent to game.php draw()) ─────────────────────────
 onMounted(() => {
   if (saveStore.team.filter(s => s.id > 0).every(s => s.hp <= 0)) {
-    router.push('/pc')
+    modalStore.openPC()
     return
   }
   buildMap()
@@ -1134,10 +1149,12 @@ onMounted(() => {
   // Keydown listener
   window.addEventListener('keydown', handleKeyDown)
 
-  // Multiplayer — show first-run modal for new players, otherwise auto-connect silently
+  // Multiplayer — new player gets first-run modal; existing players check opt-in setting
   if (isFirstSession()) {
     showFirstRun.value = true
-  } else {
+  } else if (saveStore.multiplayerEnabled === null) {
+    showMpOptIn.value = true
+  } else if (saveStore.multiplayerEnabled === true) {
     doAutoConnect()
   }
 

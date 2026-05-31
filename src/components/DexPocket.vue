@@ -5,6 +5,7 @@
     <div class="dp-bar" @pointerdown="onHandlePointerDown" style="cursor:grab;touch-action:none">
       <img src="/textures/Nav/Pokedex/0.png" class="dp-bar-icon" alt="" />
       <span class="dp-bar-title">POKÉDEX</span>
+      <button class="dp-close-btn dp-fs-btn" @click="openFullscreen" @pointerdown.stop title="Fullscreen">⛶</button>
       <button class="dp-close-btn" @click="$emit('close')" @pointerdown.stop title="Close">✕</button>
     </div>
 
@@ -229,6 +230,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSaveStore } from '../stores/save'
+import { useModalStore } from '../stores/modals'
 import { useDraggable } from '../composables/useDraggable'
 import { pokedex, padId } from '../data/pokemon'
 import { findChain, isEeveeLine, EEVEE_BASE_ID, EEVEE_BRANCHES, type EvoTrigger } from '../data/evo-chains'
@@ -239,6 +241,12 @@ import descriptionsData from '../data/pokedex-descriptions.json'
 
 const props = withDefaults(defineProps<{ initialId?: number }>(), { initialId: 1 })
 const emit  = defineEmits<{ close: [] }>()
+const modalStore = useModalStore()
+
+function openFullscreen() {
+  emit('close')
+  modalStore.openDex(props.initialId)
+}
 
 const panelRef = ref<HTMLElement | null>(null)
 const { dragStyle, onHandlePointerDown } = useDraggable('pkw_dex_pos', panelRef)

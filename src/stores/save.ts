@@ -45,6 +45,7 @@ export const useSaveStore = defineStore('save', () => {
   const shinydex = ref<Record<string, 'seen' | 'caught'>>({})
   const xpShare = ref(false)
   const xpMultiplier = ref(3)
+  const multiplayerEnabled = ref<boolean | null>(null)  // null = never asked
   const mapPos = ref(468)  // tile index; 468 = default spawn
   const mapDir = ref(1)   // resting sprite frame: 1=down, 4=left, 7=right, 10=up
 
@@ -99,6 +100,7 @@ export const useSaveStore = defineStore('save', () => {
       mapPos.value = (data as any).mapPos ?? 468
       mapDir.value = (data as any).mapDir ?? 1
       trainerWins.value = (data as any).trainerWins ?? {}
+      multiplayerEnabled.value = (data as any).multiplayerEnabled ?? null
       return true
     } catch {
       initDefaultSave()
@@ -119,6 +121,7 @@ export const useSaveStore = defineStore('save', () => {
       mapPos: mapPos.value,
       mapDir: mapDir.value,
       trainerWins: { ...trainerWins.value },
+      multiplayerEnabled: multiplayerEnabled.value,
     }
     localStorage.setItem(SAVE_KEY, encodeSave(data))
   }
@@ -192,6 +195,7 @@ export const useSaveStore = defineStore('save', () => {
     shinydex,
     xpShare,
     xpMultiplier,
+    multiplayerEnabled,
     mapPos,
     mapDir,
     encounter,
